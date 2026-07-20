@@ -254,4 +254,6 @@ Docker-Proxy is available under the [Apache 2 license](./LICENSE)
 
 ---
 
-[![Star History Chart](https://api.star-history.com/svg?repos=dqzboy/Docker-Proxy&type=Date)](https://star-history.com/#dqzboy/Docker-Proxy&Date)
+## Star History
+
+[![Star History Chart](https://api.star-history.com/chart?repos=dqzboy/Docker-Proxy&type=date&legend=top-left&sealed_token=SfUpnp7CeJMr2_b654YiehUQWQJAbzaTvdQFq8n-EjzvSN6Tl7n6XeO6NJ_ofFH0PIh0f1Toe_deHw_j31JlKL7LcFovwrmo75dW3KntbCxpEaoG8YibZA)](https://www.star-history.com/?repos=dqzboy%2FDocker-Proxy&type=date&legend=top-left)
