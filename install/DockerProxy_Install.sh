@@ -2487,7 +2487,7 @@ RM_SERVICE() {
     else
         for choice in ${rm_service}; do
             if [[ $choice =~ ^[0-9]+$ ]] && ((choice > 0 && choice <= ${#services[@]})); then
-                selected_services+=("${services[$((choice - 1)]}")
+                selected_services+=("${services[$((choice - 1))]}")
             else
                 WARN "无效输入，请重新输入${LIGHT_YELLOW} 0-10 ${RESET}序号"
                 RM_SERVICE
