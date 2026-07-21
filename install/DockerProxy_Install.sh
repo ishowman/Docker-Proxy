@@ -152,9 +152,6 @@ IMAGE_NAME="dqzboy/registry"
 # hubcmd-ui 管理面板镜像
 UI_IMAGE_NAME="dqzboy/hubcmd-ui"
 DOCKER_COMPOSE_FILE="docker-compose.yaml"
-# HubCMD-UI
-CMDUI_IMAGE_NAME="dqzboy/hubcmd-ui"
-CMDUI_COMPOSE_FILE="${GITRAW}/hubcmdui/${DOCKER_COMPOSE_FILE}"
 
 # Registry Domain prefix
 REGISTRY_SLD="ui、hub、gcr、ghcr、k8sgcr、k8s、quay、mcr、elastic、nvcr"
@@ -1875,174 +1872,6 @@ case $proxy_install in
 esac
 }
 
-function REMOVE_CMDUI() {
-CHECK_COMPOSE_CMD
-CMDUI_NAME="hubcmd-ui"
-CMDUI_DIR="${PROXY_DIR}/hubcmdui"
-if [ -d "${CMDUI_DIR}" ]; then
-    if [ -f "${CMDUI_DIR}/${DOCKER_COMPOSE_FILE}" ]; then
-        INFO "停止和移除HubCMD-UI容器"
-        $DOCKER_COMPOSE_CMD -f "${CMDUI_DIR}/${DOCKER_COMPOSE_FILE}" down --remove-orphans
-        rm -rf "${CMDUI_DIR}"
-    else
-        WARN "${LIGHT_YELLOW}文件${CMDUI_DIR}/${DOCKER_COMPOSE_FILE} 不存在，无需进行删除操作！${RESET}"
-    fi
-else
-    WARN "${LIGHT_YELLOW}目录 ${CMDUI_DIR} 不存在，无需进行删除操作！${RESET}"
-fi
-
-docker images | grep "^${CMDUI_IMAGE_NAME}.*<none>" | awk '{print $3}' | xargs -r docker rmi
-
-images=$(docker images ${CMDUI_IMAGE_NAME} --format '{{.Repository}}:{{.Tag}}')
-latest=$(echo "$images" | sort -V | tail -n1)
-for image in $images; do
-    if [ "$image" != "$latest" ]; then
-        docker rmi $image
-    fi
-done
-
-# 强制移除所有相关镜像
-docker rmi --force $(docker images -q ${CMDUI_IMAGE_NAME}) &>/dev/null
-}
-
-
-function HUBCMDUI() {
-CHECK_COMPOSE_CMD
-CMDUI_NAME="hubcmd-ui"
-CMDUI_DIR="${PROXY_DIR}/hubcmdui"
-
-CMDUI_PROMPT() {
-PUBLIC_IP=$(curl -s https://ifconfig.me)
-ALL_IPS=$(hostname -I)
-INTERNAL_IP=$(echo "$ALL_IPS" | awk '$1!="127.0.0.1" && $1!="::1" && $1!="docker0" {print $1}')
-
-echo
-INFO "=================感谢您的耐心等待，安装已经完成=================="
-INFO
-INFO "请用浏览器访问 HubCMD-UI 面板: "
-INFO "公网访问地址: ${UNDERLINE}http://$PUBLIC_IP:30080${RESET}"
-INFO "内网访问地址: ${UNDERLINE}http://$INTERNAL_IP:30080${RESET}"
-INFO
-INFO "后端访问地址: 地址后面跟admin，例: ${UNDERLINE}http://$INTERNAL_IP:30080/admin${RESET}"
-INFO "默认账号密码: ${LIGHT_GREEN}root${RESET}/${LIGHT_CYAN}admin@123${RESET}"
-INFO
-INFO "服务安装路径: ${LIGHT_BLUE}${CMDUI_DIR}${RESET}"
-INFO 
-INFO "作者博客: https://dqzboy.com"
-INFO "项目交流: https://t.me/Docker_Proxy"
-INFO "代码仓库: https://github.com/dqzboy/Docker-Proxy"
-INFO "合作联系: https://t.me/RelayHubBot"
-INFO
-INFO "VPS推荐(AFF): https://dqzboy.github.io/proxyui/racknerd"
-INFO
-INFO "================================================================"
-}
-
-INSTALL_HUBCMDUI() {
-    mkdir -p ${CMDUI_DIR}
-
-    INFO "正在安装HubCMD-UI服务，请稍等！安装路径 ${LIGHT_CYAN}${CMDUI_DIR}${RESET}"
-
-    if [[ -f "${CMDUI_DIR}/${DOCKER_COMPOSE_FILE}" ]]; then
-        if $DOCKER_COMPOSE_CMD ps --services 2>/dev/null | grep -q "^${CMDUI_NAME}$"; then
-            INFO "${CMDUI_NAME} 已经安装并启动，无需重复执行安装！"              
-        else
-            $DOCKER_COMPOSE_CMD -f "${CMDUI_DIR}/${DOCKER_COMPOSE_FILE}" up -d
-        fi
-    else 
-        wget -NP ${CMDUI_DIR}/ ${CMDUI_COMPOSE_FILE} &>/dev/null
-        if [ $? -ne 0 ]; then
-            WARN "下载${LIGHT_YELLOW}docker-compose.yaml 文件失败${RESET},请稍后重试!"
-            HUBCMDUI
-        fi
-        $DOCKER_COMPOSE_CMD -f "${CMDUI_DIR}/${DOCKER_COMPOSE_FILE}" up -d
-        if [ $? -eq 0 ]; then
-            CMDUI_PROMPT
-            exit 1
-        else
-            WARN "服务安装失败,请稍后重试!"
-            HUBCMDUI
-        fi
-    fi
-}
-
-
-UPDATE_HUBCMDUI() {
-    if [ -d "${CMDUI_DIR}" ]; then
-        if [ -f "${CMDUI_DIR}/${DOCKER_COMPOSE_FILE}" ]; then
-            INFO "正在更新HubCMD-UI容器"
-            $DOCKER_COMPOSE_CMD -f "${CMDUI_DIR}/${DOCKER_COMPOSE_FILE}" pull
-            if [ $? -ne 0 ]; then
-                WARN "HubCMD-UI ${LIGHT_YELLOW}镜像拉取失败${RESET},请稍后重试!"
-                HUBCMDUI
-            fi
-            $DOCKER_COMPOSE_CMD -f "${CMDUI_DIR}/${DOCKER_COMPOSE_FILE}" up -d --force-recreate
-            if [ $? -ne 0 ]; then
-                WARN "HubCMD-UI ${LIGHT_YELLOW}服务启动失败${RESET},请稍后重试!"
-                HUBCMDUI
-            else
-                INFO "HubCMD-UI ${LIGHT_GREEN}服务更新并启动完成${RESET}"
-            fi
-        else
-            WARN "${LIGHT_YELLOW}文件${CMDUI_DIR}/${DOCKER_COMPOSE_FILE} 不存在，无法进行更新操作！${RESET}"
-        fi
-    else
-        WARN "${LIGHT_YELLOW}目录 ${CMDUI_DIR} 不存在，无法进行更新操作！${RESET}"
-    fi
-}
-
-UNINSTALL_HUBCMDUI() {
-WARN "${LIGHT_RED}注意:${RESET} ${LIGHT_YELLOW}请执行删除之前确定是否需要备份配置文件${RESET}"
-while true; do
-    read -e -p "$(INFO "本人${LIGHT_RED}已知晓后果,确认删除${RESET}服务? ${PROMPT_YES_NO}")" delcmdui
-    case "$delcmdui" in
-        y|Y )
-            REMOVE_CMDUI
-            break;;
-        n|N )
-            WARN "退出执行卸载服务"
-            break;;
-        * )
-            INFO "请输入 ${LIGHT_GREEN}y${RESET} 或 ${LIGHT_YELLOW}n${RESET}";;
-    esac
-done
-}
-
-
-SEPARATOR "HubCMD-UI管理"
-echo -e "1) ${BOLD}${LIGHT_GREEN}安装${RESET}HubCMD-UI"
-echo -e "2) ${BOLD}${LIGHT_YELLOW}卸载${RESET}HubCMD-UI"
-echo -e "3) ${BOLD}${LIGHT_CYAN}更新${RESET}HubCMD-UI"
-echo -e "4) ${BOLD}返回${LIGHT_RED}主菜单${RESET}"
-echo -e "0) ${BOLD}退出脚本${RESET}"
-echo "---------------------------------------------------------------"
-read -e -p "$(INFO "输入${LIGHT_CYAN}对应数字${RESET}并按${LIGHT_GREEN}Enter${RESET}键 > ")"  cmdui_choice
-
-case $cmdui_choice in
-    1)
-        INSTALL_HUBCMDUI
-        HUBCMDUI
-        ;;
-    2)
-        UNINSTALL_HUBCMDUI
-        HUBCMDUI
-        ;;
-    3)
-        UPDATE_HUBCMDUI
-        HUBCMDUI
-        ;;
-    4)
-        main_menu
-        ;;
-    0)
-        exit 1
-        ;;
-    *)
-        WARN "输入了无效的选择。请重新${LIGHT_GREEN}选择0-4${RESET}的选项."
-        HUBCMDUI
-        ;;
-esac
-}
 
 
 function COMP_INST() {
@@ -2054,8 +1883,7 @@ echo -e "4) ${BOLD}安装${GREEN}Nginx${RESET}"
 echo -e "5) ${BOLD}安装${LIGHT_BLUE}Caddy${RESET}"
 echo -e "6) ${BOLD}配置${LIGHT_YELLOW}Nginx${RESET}"
 echo -e "7) ${BOLD}配置${CYAN}Caddy${RESET}"
-echo -e "8) ${BOLD}安装${BLUE}HubCMD-UI${RESET}"
-echo -e "9) ${BOLD}返回${LIGHT_RED}主菜单${RESET}"
+echo -e "8) ${BOLD}返回${LIGHT_RED}主菜单${RESET}"
 echo -e "0) ${BOLD}退出脚本${RESET}"
 echo "---------------------------------------------------------------"
 read -e -p "$(INFO "输入${LIGHT_CYAN}对应数字${RESET}并按${LIGHT_GREEN}Enter${RESET}键 > ")"  comp_choice
@@ -2132,10 +1960,6 @@ case $comp_choice in
         COMP_INST
         ;;
     8)
-        HUBCMDUI
-        COMP_INST
-        ;;
-    9)
         main_menu
         ;;
     0)
@@ -2506,7 +2330,6 @@ RM_SERVICE() {
 RM_ALLSERVICE() {
 STOP_REMOVE_CONTAINER
 REMOVE_NONE_TAG
-REMOVE_CMDUI
 docker rmi --force $(docker images -q ${IMAGE_NAME}) &>/dev/null
 docker rmi --force $(docker images -q ${UI_IMAGE_NAME}) &>/dev/null
 if [ -d "${PROXY_DIR}" ]; then
