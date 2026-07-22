@@ -23,6 +23,12 @@ async function initApp() {
     const isLoginPage = window.location.pathname.includes('admin');
     // console.log('是否为管理页面:', isLoginPage);
     
+    // 登录页：立即展示登录框，避免开局被全屏转圈遮挡、无法立即操作
+    if (isLoginPage) {
+        hideLoadingIndicator();
+        showLoginModal();
+    }
+    
     try {
         // 检查会话状态
         const sessionResult = await checkSession();
@@ -37,6 +43,11 @@ async function initApp() {
             // 已登录
             isLoggedIn = true;
             localStorage.setItem('isLoggedIn', 'true'); // 保持本地状态
+            
+            // 进入管理界面前收起登录框，并显示加载态（加载系统配置）
+            const loginModalEl = document.getElementById('loginModal');
+            if (loginModalEl) loginModalEl.style.display = 'none';
+            showLoadingIndicator();
             
             if (isLoginPage) {
                 // 在登录页，但会话有效，显示管理界面
@@ -60,10 +71,9 @@ async function initApp() {
                 window.location.href = '/admin';
                 return false;
             } else {
-                // 在登录页，显示登录框
+                // 在登录页：登录框已在初始化时提前展示，这里只需确保加载层已收起
                 // console.log('未登录，显示登录模态框...');
                 hideLoadingIndicator();
-                showLoginModal();
             }
         }
         
@@ -163,6 +173,9 @@ function applySystemConfig(config) {
  */
 function showAdminInterface() {
     // console.log('开始显示管理界面...');
+    // 确保收起登录框
+    const loginModalEl = document.getElementById('loginModal');
+    if (loginModalEl) loginModalEl.style.display = 'none';
     hideLoadingIndicator();
     
     const adminContainer = document.getElementById('adminContainer');
@@ -190,6 +203,16 @@ function hideLoadingIndicator() {
         // console.log('加载提示器已隐藏');
     } else {
         // console.warn('未找到加载提示器元素 #loadingIndicator');
+    }
+}
+
+/**
+ * 显示加载提示器（全屏转圈）
+ */
+function showLoadingIndicator() {
+    const loadingIndicator = document.getElementById('loadingIndicator');
+    if (loadingIndicator) {
+        loadingIndicator.style.display = 'flex';
     }
 }
 

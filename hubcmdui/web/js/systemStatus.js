@@ -774,7 +774,13 @@ function updateDashboardCards(data) {
                         console.warn('No function found to display Docker management (modal or section).');
                         const sidebarItem = document.querySelector('li[data-section="docker-status"]');
                         if (sidebarItem) sidebarItem.click();
-                        else alert('容器管理功能导航失败');
+                        else {
+                            if (typeof Swal !== 'undefined') {
+                                Swal.fire({ icon: 'warning', title: '导航失败', text: '容器管理功能导航失败', confirmButtonText: '确定' });
+                            } else {
+                                alert('容器管理功能导航失败');
+                            }
+                        }
                     }
                 }
             },

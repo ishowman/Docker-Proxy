@@ -100,8 +100,21 @@ function renderNavMenu(navMenuElement, menuItems) {
             
             const link = document.createElement('a');
             link.href = item.link || '#';
-            link.textContent = item.text || '未命名菜单';
-            
+
+            // 渲染 Font Awesome 图标（若配置了 icon 字段）
+            if (item.icon) {
+                const icon = document.createElement('i');
+                icon.className = item.icon;
+                icon.style.marginRight = '6px';
+                icon.style.fontSize = '15px';
+                link.appendChild(icon);
+            }
+
+            // 菜单文字
+            const textSpan = document.createElement('span');
+            textSpan.textContent = item.text || '未命名菜单';
+            link.appendChild(textSpan);
+
             // 使用内联样式确保文字颜色可见，并增大字体
             link.style.color = '#333'; // 黑色文字
             link.style.textDecoration = 'none';
@@ -110,13 +123,15 @@ function renderNavMenu(navMenuElement, menuItems) {
             link.style.padding = '8px 15px'; // 增大内边距
             link.style.borderRadius = '4px';
             link.style.transition = 'background-color 0.3s, color 0.3s';
-            
+            link.style.display = 'inline-flex';
+            link.style.alignItems = 'center';
+
             // 添加鼠标悬停效果
             link.addEventListener('mouseover', function() {
                 this.style.backgroundColor = '#3d7cf4'; // 蓝色背景
                 this.style.color = '#fff'; // 白色文字
             });
-            
+
             // 鼠标移出时恢复原样
             link.addEventListener('mouseout', function() {
                 this.style.backgroundColor = 'transparent';

@@ -1,0 +1,1433 @@
+/* =============================================================================
+ *  Apple 风格后台管理界面 — 设计系统 (apple-admin.css)
+ *  作用：在 admin.html 中最后加载，覆盖内联样式与 admin.css / mobile.css。
+ *  设计语言参考 Apple Human Interface Guidelines（浅色 / 毛玻璃 / 中性灰 + 系统蓝）
+ *  原则：克制的阴影、充足的留白、连贯的圆角、统一字体与强调色、柔和的过渡。
+ * ========================================================================== */
+
+/* ---------- 1. 设计令牌（Design Tokens）---------------------------------- */
+:root {
+  /* 苹果系统色 */
+  --apple-blue:        #0071e3;
+  --apple-blue-hover:  #0077ed;
+  --apple-blue-active: #0064c8;
+  --apple-blue-tint:   rgba(0, 113, 227, 0.10);
+  --apple-bg:          #f5f5f7;   /* 苹果标志性浅灰背景 */
+  --apple-surface:     #ffffff;
+  --apple-surface-2:   #fbfbfd;
+  --apple-text:        #1d1d1f;
+  --apple-text-2:      #6e6e73;
+  --apple-text-3:      #86868b;
+  --apple-sep:         rgba(0, 0, 0, 0.08);
+  --apple-sep-strong:  #d2d2d7;
+  --apple-green:       #34c759;
+  --apple-green-tint:  rgba(52, 199, 89, 0.12);
+  --apple-red:         #ff3b30;
+  --apple-red-tint:    rgba(255, 59, 48, 0.12);
+  --apple-orange:      #ff9f0a;
+  --apple-orange-tint: rgba(255, 159, 10, 0.14);
+  --apple-teal:        #64b5f6;
+  --apple-teal-tint:   rgba(10, 132, 255, 0.10);
+
+  /* 圆角 */
+  --apple-r-sm: 10px;
+  --apple-r-md: 14px;
+  --apple-r-lg: 20px;
+  --apple-r-pill: 980px;
+
+  /* 阴影：克制、分层 */
+  --apple-shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.04);
+  --apple-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.05), 0 1px 2px rgba(0, 0, 0, 0.03);
+  --apple-shadow-md: 0 6px 20px rgba(0, 0, 0, 0.06);
+  --apple-shadow-lg: 0 16px 48px rgba(0, 0, 0, 0.10);
+
+  /* 苹果标准缓动（入场有弹性、克制） */
+  --apple-ease: cubic-bezier(0.32, 0.72, 0, 1);
+  --apple-ease-soft: cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* —— 重映射既有变量，使所有依赖 var() 的旧规则自动跟随苹果色板 —— */
+  --primary-color:  #0071e3;
+  --primary-light:  #4aa3ff;
+  --primary-dark:   #0058c7;
+  --background-color: var(--apple-bg);
+  --container-bg:   var(--apple-surface);
+  --card-bg:        var(--apple-surface);
+  --text-primary:   var(--apple-text);
+  --text-secondary: var(--apple-text-2);
+  --text-muted:     var(--apple-text-3);
+  --border-color:   var(--apple-sep-strong);
+  --border-light:   var(--apple-sep);
+  --success-color:  var(--apple-green);
+  --warning-color:  var(--apple-orange);
+  --danger-color:   var(--apple-red);
+  --info-color:     var(--apple-blue);
+  --shadow-sm: var(--apple-shadow-sm);
+  --shadow-md: var(--apple-shadow-md);
+  --shadow-lg: var(--apple-shadow-lg);
+  --radius-sm: var(--apple-r-sm);
+  --radius-md: var(--apple-r-md);
+  --radius-lg: var(--apple-r-lg);
+  --transition-fast: 0.18s var(--apple-ease-soft);
+  --transition-normal: 0.28s var(--apple-ease);
+  --transition-slow: 0.4s var(--apple-ease-soft);
+}
+
+/* ---------- 2. 全局基础 --------------------------------------------------- */
+* {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+html, body {
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display",
+               "Helvetica Neue", "PingFang SC", "Microsoft YaHei", Helvetica, Arial, sans-serif;
+  text-rendering: optimizeLegibility;
+  letter-spacing: -0.01em;
+}
+
+::selection {
+  background: rgba(0, 113, 227, 0.18);
+  color: var(--apple-text);
+}
+
+/* 苹果风细滚动条 */
+.sidebar ::-webkit-scrollbar,
+.content-area ::-webkit-scrollbar,
+.table-container ::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+.sidebar ::-webkit-scrollbar-thumb,
+.content-area ::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.18);
+  border-radius: 8px;
+}
+.sidebar ::-webkit-scrollbar-thumb:hover,
+.content-area ::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.28);
+}
+
+/* 标题统一字距（苹果紧凑字距） */
+.welcome-title, .admin-title, .page-title, .menu-label,
+.user-center-title, .section-title, h1, h2, h3 {
+  letter-spacing: -0.02em;
+}
+
+/* ---------- 3. 整体布局 --------------------------------------------------- */
+.admin-container {
+  background-color: var(--apple-bg);
+}
+
+.content-area {
+  background: var(--apple-bg);
+  padding: 2.25rem 2.5rem;
+}
+
+/* ---------- 4. 侧边栏（毛玻璃 / 苹果导航）------------------------------- */
+@media (min-width: 769px) {
+  .sidebar {
+    width: 264px;
+    background: rgba(255, 255, 255, 0.72);
+    -webkit-backdrop-filter: saturate(180%) blur(20px);
+    backdrop-filter: saturate(180%) blur(20px);
+    border-right: 1px solid var(--apple-sep);
+    box-shadow: 1px 0 0 rgba(0, 0, 0, 0.02);
+    padding: 1.5rem 0.75rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+}
+
+.sidebar-header {
+  margin-bottom: 0.75rem;
+  padding: 0 0.75rem;
+}
+.sidebar-header h2,
+.sidebar h2 {
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: var(--apple-text);
+  gap: 0.55rem;
+  justify-content: flex-start;
+  padding: 0;
+  margin-bottom: 0.5rem;
+}
+.sidebar-header h2::after,
+.sidebar h2::after {
+  display: none;
+}
+.sidebar-header h2 i,
+.sidebar h2 i {
+  color: var(--apple-blue);
+  font-size: 1.05rem;
+}
+
+/* 用户信息块：干净、克制 */
+.user-profile {
+  background: rgba(0, 0, 0, 0.025);
+  border: 1px solid var(--apple-sep);
+  border-radius: var(--apple-r-md);
+  padding: 1.1rem 1rem;
+  margin: 0 0.25rem 1rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.user-avatar {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #0a84ff 0%, #0066d6 100%);
+  border: none;
+  box-shadow: 0 4px 12px rgba(0, 113, 227, 0.25);
+  font-size: 1.6rem;
+  margin-bottom: 0.75rem;
+}
+.user-name {
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: var(--apple-text);
+}
+.user-role {
+  background: var(--apple-blue-tint);
+  color: var(--apple-blue);
+  font-weight: 500;
+  border-radius: var(--apple-r-pill);
+  padding: 0.2rem 0.7rem;
+  font-size: 0.78rem;
+}
+.user-actions {
+  gap: 0.5rem;
+  margin-top: 0.85rem;
+  width: 100%;
+}
+.user-action-btn {
+  flex: 1;
+  text-align: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.04);
+  color: var(--apple-text-2);
+  border-radius: var(--apple-r-sm);
+  font-size: 0.82rem;
+  padding: 0.5rem 0.4rem;
+  font-weight: 500;
+}
+.user-action-btn:hover {
+  background: var(--apple-blue);
+  color: #fff;
+  transform: none;
+  box-shadow: 0 4px 12px rgba(0, 113, 227, 0.25);
+}
+.user-action-btn.logout {
+  background: rgba(255, 59, 48, 0.08);
+  color: var(--apple-red);
+}
+.user-action-btn.logout:hover {
+  background: var(--apple-red);
+  color: #fff;
+  box-shadow: 0 4px 12px rgba(255, 59, 48, 0.22);
+}
+
+/* 导航列表 */
+.sidebar ul {
+  padding: 0 0.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.sidebar li {
+  padding: 0.7rem 0.85rem;
+  margin: 0;
+  border-radius: var(--apple-r-sm);
+  font-size: 0.92rem;
+  font-weight: 500;
+  color: var(--apple-text-2);
+  gap: 0.75rem;
+  transition: background-color 0.18s var(--apple-ease-soft), color 0.18s var(--apple-ease-soft);
+}
+.sidebar li:hover {
+  background: rgba(0, 0, 0, 0.045);
+  color: var(--apple-text);
+  transform: none;
+}
+.sidebar li:hover i {
+  transform: scale(1.05);
+}
+.sidebar li i {
+  font-size: 1rem;
+  width: 1.25rem;
+  color: var(--apple-text-3);
+}
+.sidebar li.active {
+  background: var(--apple-blue-tint);
+  color: var(--apple-blue);
+  font-weight: 600;
+  box-shadow: none;
+}
+.sidebar li.active i {
+  color: var(--apple-blue);
+}
+.sidebar li.active::before {
+  display: none;
+}
+/* 活动项左侧细指示条（苹果风） */
+.sidebar li.active {
+  position: relative;
+}
+.sidebar li.active::after {
+  content: "";
+  position: absolute;
+  left: -0.25rem;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 3px;
+  height: 55%;
+  background: var(--apple-blue);
+  border-radius: 3px;
+}
+
+/* ---------- 5. 内容卡片容器（白色表面）---------------------------------- */
+.content-section {
+  background: var(--apple-surface);
+  border: 1px solid var(--apple-sep);
+  border-radius: var(--apple-r-lg);
+  box-shadow: var(--apple-shadow-sm);
+  padding: 1.75rem 2rem;
+  display: none;
+  transform: translateY(8px);
+  opacity: 0;
+  transition: transform 0.32s var(--apple-ease), opacity 0.32s var(--apple-ease-soft);
+}
+.content-section.active {
+  display: block;
+  transform: translateY(0);
+  opacity: 1;
+}
+
+/* 页面标题 */
+.admin-title,
+.menu-label {
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: var(--apple-text);
+  margin-bottom: 1.5rem;
+  padding-bottom: 0.75rem;
+}
+.admin-title::after,
+.menu-label::after {
+  height: 2px;
+  width: 56px;
+  background: var(--apple-blue);
+  border-radius: 2px;
+}
+
+/* ---------- 6. 欢迎横幅（苹果 Hero）------------------------------------- */
+.welcome-banner {
+  background: linear-gradient(135deg, #0a84ff 0%, #0066d6 100%);
+  border-radius: var(--apple-r-lg);
+  padding: 2.5rem 2.75rem;
+  margin-bottom: 1.75rem;
+  box-shadow: 0 10px 36px rgba(0, 113, 227, 0.22);
+  overflow: hidden;
+}
+.welcome-banner::before,
+.welcome-banner::after {
+  opacity: 0.5;
+}
+.welcome-title {
+  font-size: 1.9rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+.welcome-title span {
+  background: linear-gradient(90deg, #ffffff, #d6e8ff);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+.welcome-subtitle {
+  font-size: 1.02rem;
+  opacity: 0.92;
+  font-weight: 400;
+}
+.welcome-action {
+  background: rgba(255, 255, 255, 0.18);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  border-radius: var(--apple-r-pill);
+  padding: 0.7rem 1.5rem;
+  font-weight: 500;
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+}
+.welcome-action:hover {
+  background: rgba(255, 255, 255, 0.3);
+  transform: translateY(-1px);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.18);
+}
+.welcome-action:hover i {
+  transform: rotate(180deg);
+}
+.docker-status {
+  background: rgba(255, 255, 255, 0.16);
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  border-radius: var(--apple-r-pill);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+}
+.docker-status.docker-running {
+  background: rgba(52, 199, 89, 0.22);
+  border-color: rgba(52, 199, 89, 0.45);
+}
+.docker-status.docker-stopped {
+  background: rgba(255, 59, 48, 0.22);
+  border-color: rgba(255, 59, 48, 0.45);
+}
+
+/* ---------- 7. 仪表盘卡片（Bento 风）------------------------------------ */
+.dashboard-grid {
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 1.25rem;
+}
+.dashboard-card {
+  border-radius: var(--apple-r-md);
+  box-shadow: var(--apple-shadow-sm);
+  border: 1px solid var(--apple-sep);
+  padding: 1.5rem;
+  background: var(--apple-surface);
+  overflow: hidden;
+}
+.dashboard-card:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--apple-shadow-md);
+  border-color: var(--apple-sep-strong);
+}
+.dashboard-card::before {
+  width: 3px;
+  background: linear-gradient(180deg, #0a84ff, #0066d6);
+  border-radius: 3px 0 0 3px;
+}
+.dashboard-card::after {
+  background: linear-gradient(135deg, transparent 62%, rgba(0, 113, 227, 0.04) 100%);
+}
+.card-icon {
+  width: 50px;
+  height: 50px;
+  border-radius: 14px;
+  background: var(--apple-blue-tint);
+  color: var(--apple-blue);
+  font-size: 1.35rem;
+}
+.card-title {
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: var(--apple-text);
+}
+.card-value {
+  font-size: 1.7rem;
+  font-weight: 700;
+  color: var(--apple-text);
+  letter-spacing: -0.02em;
+}
+.card-description {
+  color: var(--apple-text-2);
+}
+.card-action {
+  color: var(--apple-blue);
+  font-weight: 500;
+}
+.trend.up { color: var(--apple-green); }
+.trend.down { color: var(--apple-red); }
+
+/* ---------- 8. 统一页面头部（page-header）------------------------------- */
+.page-header {
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid var(--apple-sep);
+  border-radius: 0;
+  box-shadow: none;
+  padding: 0 0 1.25rem 0;
+  margin-bottom: 1.75rem;
+}
+.page-header::before { display: none; }
+.page-header:hover { box-shadow: none; }
+.page-title {
+  font-size: 1.6rem;
+  font-weight: 600;
+  color: var(--apple-text);
+}
+.page-title i {
+  color: var(--apple-blue);
+  font-size: 1.35rem;
+}
+.page-subtitle {
+  color: var(--apple-text-2);
+  font-size: 0.92rem;
+}
+
+/* ---------- 9. 配置卡片（config-card）----------------------------------- */
+.config-cards-grid {
+  gap: 1.25rem;
+}
+.config-card {
+  background: var(--apple-surface);
+  border: 1px solid var(--apple-sep);
+  border-radius: var(--apple-r-md);
+  box-shadow: var(--apple-shadow-sm);
+  overflow: hidden;
+}
+.config-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--apple-shadow-md);
+}
+.config-card-header {
+  background: rgba(0, 0, 0, 0.02);
+  border-bottom: 1px solid var(--apple-sep);
+  padding: 1.1rem 1.5rem;
+}
+.config-card-icon {
+  border-radius: 12px;
+  background: linear-gradient(135deg, #0a84ff, #0066d6);
+}
+.config-card-icon.purple { background: linear-gradient(135deg, #7c5cff, #5b8def); }
+.config-card-icon.blue   { background: linear-gradient(135deg, #0a84ff, #0066d6); }
+.config-card-icon.green  { background: linear-gradient(135deg, #34c759, #2bb54a); }
+.config-card-icon.red    { background: linear-gradient(135deg, #ff3b30, #ff5e3a); }
+.config-card-icon.orange { background: linear-gradient(135deg, #ff9f0a, #ffb340); }
+.config-card-title h3 {
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: var(--apple-text);
+}
+.config-card-title p {
+  color: var(--apple-text-2);
+}
+
+/* ---------- 10. 按钮（苹果胶囊 / 圆角）---------------------------------- */
+/* 主按钮：系统蓝胶囊 */
+.btn-primary,
+.btn-with-icon,
+.welcome-action,
+.content-section button,
+.page-header .btn-with-icon,
+.user-center-header .btn-primary,
+.user-center-section .btn-primary {
+  background: var(--apple-blue) !important;
+  color: #fff !important;
+  border: none !important;
+  border-radius: var(--apple-r-pill) !important;
+  padding: 0.6rem 1.3rem !important;
+  font-size: 0.9rem !important;
+  font-weight: 500 !important;
+  box-shadow: 0 2px 8px rgba(0, 113, 227, 0.22) !important;
+  transition: background-color 0.18s var(--apple-ease-soft),
+              transform 0.18s var(--apple-ease-soft),
+              box-shadow 0.18s var(--apple-ease-soft) !important;
+}
+.btn-primary:hover,
+.btn-with-icon:hover,
+.content-section button:hover,
+.page-header .btn-with-icon:hover {
+  background: var(--apple-blue-hover) !important;
+  transform: translateY(-1px) !important;
+  box-shadow: 0 6px 16px rgba(0, 113, 227, 0.28) !important;
+}
+.btn-primary:active,
+.btn-with-icon:active,
+.content-section button:active {
+  background: var(--apple-blue-active) !important;
+  transform: translateY(0) !important;
+  box-shadow: 0 1px 4px rgba(0, 113, 227, 0.25) !important;
+}
+/* 移除内联给按钮强加的前置图标（登录按钮等） */
+.login-form button::before,
+.btn::before,
+.btn-primary::before {
+  content: none !important;
+}
+
+/* 次级 / 幽灵按钮 */
+.btn-secondary {
+  background: rgba(0, 0, 0, 0.05) !important;
+  color: var(--apple-text) !important;
+  box-shadow: none !important;
+}
+.btn-secondary:hover {
+  background: rgba(0, 0, 0, 0.08) !important;
+  color: var(--apple-text) !important;
+}
+
+/* ---------- 11. 表单与输入框（苹果风）---------------------------------- */
+.content-section input[type="text"],
+.content-section input[type="url"],
+.content-section input[type="password"],
+.content-section input[type="number"],
+.content-section select,
+.modern-input,
+.form-input,
+.form-select,
+.form-control,
+.tag-search-container input,
+.search-container input,
+.registry-tab,
+.password-input {
+  border: 1px solid var(--apple-sep-strong) !important;
+  border-radius: var(--apple-r-sm) !important;
+  padding: 0.6rem 0.9rem !important;
+  font-size: 0.92rem !important;
+  background: var(--apple-surface) !important;
+  color: var(--apple-text) !important;
+  box-shadow: none !important;
+  transition: border-color 0.18s var(--apple-ease-soft),
+              box-shadow 0.18s var(--apple-ease-soft) !important;
+}
+.content-section input:focus,
+.content-section select:focus,
+.modern-input:focus,
+.form-input:focus,
+.form-select:focus,
+.form-control:focus,
+.tag-search-container input:focus,
+.search-container input:focus,
+.password-input:focus,
+.password-input-wrapper:focus-within {
+  outline: none !important;
+  border-color: var(--apple-blue) !important;
+  box-shadow: 0 0 0 4px rgba(0, 113, 227, 0.15) !important;
+}
+.content-section label,
+.modern-form label,
+.form-group label,
+.modern-form-group label {
+  color: var(--apple-text) !important;
+  font-weight: 500 !important;
+  font-size: 0.88rem !important;
+}
+.input-hint {
+  color: var(--apple-text-3) !important;
+}
+
+/* 密码输入框 — 苹果风（placeholder 与普通 input 完全一致的垂直居中） */
+.password-input-wrapper {
+  border: 1px solid var(--apple-sep-strong) !important;
+  border-radius: var(--apple-r-sm) !important;
+  background: var(--apple-surface) !important;
+  padding: 0 !important;
+  /* 不设固定 height，用内部 padding 控制视觉高度 */
+  display: flex !important;
+  align-items: center !important;
+  overflow: hidden;
+}
+.password-input-wrapper:focus-within {
+  border-color: var(--apple-blue) !important;
+  box-shadow: 0 0 0 4px rgba(0, 113, 227, 0.15) !important;
+}
+/* 内部 input：与普通 .form-input 完全一致的 padding + line-height */
+.password-input-wrapper input,
+.password-input-wrapper input[type="text"],
+.password-input-wrapper input[type="password"],
+.password-input-wrapper .form-input {
+  border: none !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  /* 关键：不设 height/line-height 强制值，用 padding 撑开 + 正常 line-height 让 placeholder 自动垂直居中 */
+  height: auto !important;
+  min-height: 38px;
+  line-height: 1.5 !important;
+  padding: 0.45rem 0.85rem !important;
+  font-size: 0.92rem !important;
+  background: transparent !important;
+  box-sizing: border-box !important;
+}
+/* 眼睛按钮 — 精致小巧 */
+.password-input-wrapper .toggle-password {
+  width: 30px !important;
+  height: 30px !important;
+  min-width: 30px !important;
+  min-height: 30px !important;
+  background: rgba(0, 113, 227, 0.08) !important;
+  border: none !important;
+  border-radius: 8px !important;
+  color: var(--apple-blue) !important;
+  font-size: 0.78rem !important;
+  margin-right: 5px !important;
+  margin-left: 0 !important;
+  transition: all 0.18s ease !important;
+}
+.password-input-wrapper .toggle-password:hover {
+  background: rgba(0, 113, 227, 0.16) !important;
+}
+
+/* ---------- 12. 表格（现代 / 苹果）------------------------------------- */
+.table-container {
+  background: var(--apple-surface);
+  border: 1px solid var(--apple-sep);
+  border-radius: var(--apple-r-md);
+  box-shadow: var(--apple-shadow-sm);
+  overflow: hidden;
+}
+table.modern-table {
+  font-size: 0.875rem;
+}
+.modern-table thead th {
+  background: #fafafc;
+  color: var(--apple-text-3);
+  font-weight: 600;
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  border-bottom: 1px solid var(--apple-sep);
+  padding: 12px 20px;
+}
+.modern-table thead th:first-child { border-radius: 0; }
+.modern-table thead th:last-child { border-radius: 0; }
+.modern-table tbody td {
+  padding: 14px 20px;
+  color: var(--apple-text);
+  border-bottom: 1px solid var(--apple-sep);
+  font-size: 0.875rem;
+}
+.modern-table tbody td:first-child {
+  color: var(--apple-text);
+  font-weight: 500;
+}
+.modern-table tbody tr:hover td {
+  background-color: rgba(0, 0, 0, 0.02);
+}
+.modern-table tbody tr:last-child td {
+  border-bottom: none;
+}
+.modern-table.excel-table th { background: #fafafc; border-bottom: 1px solid var(--apple-sep); color: var(--apple-text-3); }
+.modern-table.excel-table td { border-bottom: 1px solid var(--apple-sep); color: var(--apple-text); }
+.modern-table.excel-table tr:nth-child(even) td { background-color: #fcfcfd; }
+.modern-table.excel-table tr:hover td { background-color: rgba(0, 0, 0, 0.02); }
+
+/* 表格内操作按钮（浅色圆形） */
+.modern-table .action-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: transparent;
+}
+.modern-table .action-btn:hover { transform: translateY(-1px); }
+.modern-table .action-btn.edit-btn:hover   { background: var(--apple-blue-tint); }
+.modern-table .action-btn.delete-btn:hover { background: var(--apple-red-tint); }
+.modern-table .action-btn.publish-btn:hover { background: var(--apple-green-tint); }
+.modern-table .action-btn.unpublish-btn:hover { background: var(--apple-orange-tint); }
+.modern-table .action-btn.preview-btn:hover { background: rgba(124, 92, 255, 0.12); }
+
+/* ---------- 13. 状态徽章（苹果胶囊 / 浅色填充）------------------------- */
+.status-running,
+.status-created {
+  background: var(--apple-green-tint) !important;
+  color: #1c8a3c !important;
+  border-radius: var(--apple-r-pill) !important;
+  padding: 0.25rem 0.7rem !important;
+  font-size: 0.76rem !important;
+  font-weight: 600 !important;
+}
+.status-stopped,
+.status-exited {
+  background: var(--apple-red-tint) !important;
+  color: #d23a2f !important;
+  border-radius: var(--apple-r-pill) !important;
+  padding: 0.25rem 0.7rem !important;
+  font-size: 0.76rem !important;
+  font-weight: 600 !important;
+}
+.status-paused {
+  background: var(--apple-orange-tint) !important;
+  color: #c97a06 !important;
+  border-radius: var(--apple-r-pill) !important;
+  padding: 0.25rem 0.7rem !important;
+  font-size: 0.76rem !important;
+  font-weight: 600 !important;
+}
+.status-unknown {
+  background: rgba(0, 0, 0, 0.06) !important;
+  color: var(--apple-text-2) !important;
+  border-radius: var(--apple-r-pill) !important;
+  padding: 0.25rem 0.7rem !important;
+  font-size: 0.76rem !important;
+  font-weight: 600 !important;
+}
+
+/* 状态指示条（容器管理页） */
+.status-indicator {
+  border-radius: var(--apple-r-pill);
+  padding: 0.35rem 0.85rem;
+  font-size: 0.82rem;
+  font-weight: 500;
+}
+.status-indicator.running { background: var(--apple-green-tint); color: #1c8a3c; }
+.status-indicator.stopped { background: var(--apple-red-tint); color: #d23a2f; }
+
+/* ---------- 14. 用户中心 / 统计卡 --------------------------------------- */
+.user-stats-row { gap: 1.25rem; }
+.stat-card-enhanced {
+  background: var(--apple-surface);
+  border: 1px solid var(--apple-sep);
+  border-radius: var(--apple-r-md);
+  box-shadow: var(--apple-shadow-sm);
+  padding: 1.25rem 1.5rem;
+}
+.stat-card-enhanced:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--apple-shadow-md);
+  border-color: var(--apple-sep-strong);
+}
+.stat-icon-wrapper {
+  border-radius: 14px;
+}
+.stat-icon-wrapper.blue   { background: linear-gradient(135deg, #0a84ff, #0066d6); }
+.stat-icon-wrapper.green  { background: linear-gradient(135deg, #34c759, #2bb54a); }
+.stat-icon-wrapper.purple { background: linear-gradient(135deg, #7c5cff, #5b8def); }
+.stat-icon-wrapper.orange { background: linear-gradient(135deg, #ff9f0a, #ffb340); }
+.stat-card-enhanced .stat-value {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--apple-text);
+  letter-spacing: -0.02em;
+}
+.stat-card-enhanced .stat-label { color: var(--apple-text-2); }
+
+/* 用户资料卡 */
+.user-profile-card {
+  background: linear-gradient(135deg, #0a84ff 0%, #0066d6 100%);
+  border-radius: var(--apple-r-lg);
+  box-shadow: 0 10px 36px rgba(0, 113, 227, 0.2);
+}
+.user-profile-name { font-weight: 600; letter-spacing: -0.02em; }
+.btn-outline {
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-radius: var(--apple-r-pill);
+}
+.btn-outline:hover { background: rgba(255, 255, 255, 0.12); }
+.btn-danger-outline {
+  border: 1.5px solid var(--apple-red);
+  color: var(--apple-red);
+  border-radius: var(--apple-r-pill);
+}
+.btn-danger-outline:hover { background: var(--apple-red); color: #fff; }
+
+/* ---------- 15. 区段标题装饰条统一为苹果蓝 ------------------------------ */
+.security-section-header h2 i,
+.card-icon-header .user-center-section-title,
+.user-center-section-title::after {
+  color: var(--apple-blue);
+}
+.user-center-section-title::after {
+  background: var(--apple-blue);
+}
+.section-title {
+  border-left: 3px solid var(--apple-blue);
+  padding-left: 0.85rem;
+  border-radius: 2px;
+}
+.menu-edit-title { color: var(--apple-text); }
+
+/* ---------- 16. 登录弹窗（毛玻璃 / 苹果）------------------------------- */
+.login-modal::before {
+  /* 保留原背景图 /images/login-bg.jpg，仅叠加低透明度 scrim 让照片透出 */
+  background: linear-gradient(135deg, rgba(0, 20, 60, 0.32) 0%, rgba(0, 113, 227, 0.18) 55%, rgba(0, 0, 0, 0.30) 100%);
+  -webkit-backdrop-filter: blur(3px);
+  backdrop-filter: blur(3px);
+}
+.login-content {
+  background: rgba(255, 255, 255, 0.94);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  backdrop-filter: blur(20px) saturate(180%);
+  border-radius: var(--apple-r-lg);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.28);
+  border: 1px solid rgba(255, 255, 255, 0.5);
+}
+.login-header h2 {
+  font-weight: 700;
+  color: var(--apple-text);
+  letter-spacing: -0.02em;
+}
+.login-header h2::after {
+  background: linear-gradient(90deg, #0a84ff, #0066d6);
+}
+.login-form input[type="text"],
+.login-form input[type="password"] {
+  background: #fbfbfd;
+  border: 1px solid var(--apple-sep-strong);
+  border-radius: var(--apple-r-sm);
+  padding: 0.85rem 1rem;
+  box-shadow: none;
+  font-size: 0.95rem;
+}
+.login-form input:focus {
+  border-color: var(--apple-blue);
+  box-shadow: 0 0 0 4px rgba(0, 113, 227, 0.15);
+  background: #fff;
+}
+.login-form button {
+  background: var(--apple-blue) !important;
+  border-radius: var(--apple-r-pill) !important;
+  font-weight: 600;
+  box-shadow: 0 4px 14px rgba(0, 113, 227, 0.3) !important;
+}
+.login-form button:hover {
+  background: var(--apple-blue-hover) !important;
+  transform: translateY(-1px);
+}
+.captcha-container span {
+  background: #fbfbfd;
+  border: 1px solid var(--apple-sep-strong);
+  border-radius: var(--apple-r-sm);
+  color: var(--apple-text-2);
+}
+.captcha-container span:hover {
+  color: var(--apple-blue);
+  border-color: var(--apple-blue);
+  background: #fff;
+}
+
+/* ---------- 17. 进度条 / 活动列表 --------------------------------------- */
+.progress-bar-container {
+  background-color: rgba(0, 0, 0, 0.06);
+  border-radius: var(--apple-r-pill);
+  height: 8px;
+}
+.progress-bar {
+  background: linear-gradient(90deg, #0a84ff 0%, #4aa3ff 100%);
+  border-radius: var(--apple-r-pill);
+}
+.activity-item { border-bottom: 1px solid var(--apple-sep); }
+.activity-icon {
+  border-radius: 50%;
+}
+.activity-icon.login { background: #0a84ff; }
+.activity-icon.container { background: #0a84ff; }
+.activity-icon.password { background: #ff375f; }
+.activity-title { color: var(--apple-text); font-weight: 500; }
+.activity-time { color: var(--apple-text-3); }
+
+/* 安全提示卡 */
+.security-tips {
+  background: var(--apple-blue-tint);
+  border: 1px solid rgba(0, 113, 227, 0.18);
+  border-radius: var(--apple-r-md);
+}
+.tip-header { color: var(--apple-blue); }
+
+/* ---------- 18. 监控 / 测试卡片 ----------------------------------------- */
+.monitoring-status {
+  background: var(--apple-blue-tint);
+  border-radius: var(--apple-r-sm);
+  color: var(--apple-text-2);
+}
+.config-form {
+  background: var(--apple-surface);
+  border: 1px solid var(--apple-sep);
+  border-radius: var(--apple-r-md);
+  box-shadow: var(--apple-shadow-sm);
+}
+.test-controls-card {
+  background: var(--apple-surface);
+  border: 1px solid var(--apple-sep);
+  border-radius: var(--apple-r-md);
+  box-shadow: var(--apple-shadow-sm);
+  padding: 1.5rem;
+}
+.go-proxy-settings-grid {
+  grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
+  gap: 1rem 1.15rem !important;
+}
+@media (max-width: 1180px) {
+  .go-proxy-settings-grid { grid-template-columns: repeat(3, minmax(0, 1fr)) !important; }
+}
+@media (max-width: 760px) {
+  .go-proxy-settings-grid { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+}
+
+/* 网络测试：按钮与输入框垂直居中对齐 */
+.test-controls-card .test-controls-container {
+  align-items: center !important;
+}
+.test-controls-card .form-group.btn-group {
+  align-self: center !important;
+}
+
+/* ---------- 19. Registry 平台配置：独立保存按钮 + 隐藏全局按钮 -------- */
+/* 隐藏底部全局"保存 Registry 配置"按钮（改用每卡独立保存） */
+.registry-config-actions { display: none !important; }
+
+/* 每张 Registry 卡片内的保存按钮 */
+.registry-config-item .registry-card-save-btn {
+  margin-top: 1rem;
+  width: 100%;
+  background: var(--apple-blue) !important;
+  color: #fff !important;
+  border: none !important;
+  border-radius: var(--apple-r-pill) !important;
+  padding: 0.55rem 1.2rem !important;
+  font-size: 0.85rem !important;
+  font-weight: 500 !important;
+  box-shadow: 0 2px 8px rgba(0, 113, 227, 0.2) !important;
+  transition: all 0.18s var(--apple-ease-soft) !important;
+}
+.registry-config-item .registry-card-save-btn:hover {
+  background: var(--apple-blue-hover) !important;
+  transform: translateY(-1px) !important;
+  box-shadow: 0 6px 16px rgba(0, 113, 227, 0.28) !important;
+}
+.registry-config-item .registry-card-save-btn:active {
+  transform: translateY(0) !important;
+}
+
+/* ---------- 20. Bootstrap 弹窗美化（苹果毛玻璃风）---------------------- */
+.modal-dialog-centered .modal-content {
+  border: 1px solid var(--apple-sep);
+  border-radius: var(--apple-r-lg);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.18), 0 0 1px rgba(0, 0, 0, 0.06);
+  overflow: hidden;
+}
+.modal-header {
+  background: rgba(0, 0, 0, 0.02);
+  border-bottom: 1px solid var(--apple-sep);
+  padding: 1.15rem 1.5rem;
+}
+.modal-title {
+  font-weight: 600;
+  color: var(--apple-text);
+  font-size: 1.05rem;
+  letter-spacing: -0.01em;
+}
+.modal-body {
+  padding: 1.5rem;
+}
+.modal-footer {
+  border-top: 1px solid var(--apple-sep);
+  padding: 1rem 1.5rem;
+  gap: 0.5rem;
+}
+.btn-close { opacity: 0.5; }
+.btn-close:hover { opacity: 0.8; }
+.modal-footer .btn-outline-secondary {
+  background: rgba(0, 0, 0, 0.05) !important;
+  color: var(--apple-text-2) !important;
+  border: 1px solid var(--apple-sep-strong) !important;
+  border-radius: var(--apple-r-pill) !important;
+  font-weight: 500 !important;
+}
+.modal-footer .btn-outline-secondary:hover {
+  background: rgba(0, 0, 0, 0.08) !important;
+  color: var(--apple-text) !important;
+}
+
+/* ---------- 21. 容器日志弹窗（专业终端风格）---------------------------- */
+.swal2-logs-popup {
+  max-width: 82% !important;
+  border-radius: var(--apple-r-lg) !important;
+  overflow: hidden;
+}
+/* ===== 21. 容器日志弹窗 — 专业终端风格（全暗色）======================= */
+.swal2-log-terminal {
+  background: #0d1117 !important;
+  border: 1px solid rgba(255,255,255,0.08) !important;
+  border-radius: 14px !important;
+  box-shadow: 0 32px 80px rgba(0,0,0,0.55), 0 0 1px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.04) !important;
+  overflow: hidden;
+  padding: 0 !important;
+}
+/* 隐藏默认标题（我们用自定义 header） */
+.swal2-log-terminal .swal2-title { display: none !important; }
+.swal2-log-terminal .swal2-close { display: none !important; }
+
+/* HTML 容器 — 无 padding，全黑 */
+.swal2-log-body {
+  padding: 0 !important;
+  background: #0d1117 !important;
+  overflow: hidden;
+}
+
+/* ---- 终端 Header（深灰工具栏）---- */
+.log-viewer-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  background: #161b22;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+.log-viewer-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.log-viewer-icon {
+  color: #58a6ff;
+  font-size: 1rem;
+  line-height: 1;
+}
+.log-viewer-name {
+  color: #e6edf3;
+  font-size: 0.88rem;
+  font-weight: 600;
+  font-family: -apple-system, 'SF Pro Text', 'PingFang SC', sans-serif;
+  letter-spacing: -0.01em;
+}
+.log-viewer-badge {
+  font-size: 0.72rem;
+  font-weight: 500;
+  color: #8b949e;
+  background: rgba(255,255,255,0.05);
+  padding: 2px 7px;
+  border-radius: 10px;
+  border: 1px solid rgba(255,255,255,0.06);
+}
+
+/* 复制按钮 */
+.log-copy-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 11px;
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: #8b949e;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  font-family: inherit;
+}
+.log-copy-btn:hover {
+  color: #e6edf3;
+  background: rgba(255,255,255,0.08);
+  border-color: rgba(255,255,255,0.12);
+}
+.log-copy-btn.copied {
+  color: #3fb950 !important;
+  border-color: rgba(63,185,80,0.25) !important;
+}
+
+/* ---- 终端 Body（日志内容区）---- */
+.log-viewer-body {
+  max-height: 62vh;
+  min-height: 300px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  background: #0d1117;
+  padding: 8px 0 !important;
+  /* 细滚动条 */
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255,255,255,0.1) transparent;
+}
+.log-viewer-body::-webkit-scrollbar { width: 6px; }
+.log-viewer-body::-webkit-scrollbar-thumb {
+  background: rgba(255,255,255,0.12);
+  border-radius: 6px;
+}
+.log-viewer-body::-webkit-scrollbar-thumb:hover {
+  background: rgba(255,255,255,0.18);
+}
+
+/* 每行日志 */
+.log-line {
+  display: flex;
+  align-items: flex-start;
+  padding: 1px 0;
+  min-height: 20px;
+  transition: background 0.08s ease;
+  font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', 'JetBrains Mono', 'Consolas', 'Monaco', Menlo, monospace;
+  font-size: 0.82rem;
+  line-height: 1.55;
+  text-align: left;
+}
+.log-line:hover {
+  background: rgba(255,255,255,0.03);
+}
+/* 行号 */
+.log-ln {
+  display: inline-block;
+  width: 52px;
+  flex-shrink: 0;
+  text-align: right;
+  padding-right: 16px;
+  margin-right: 12px;
+  color: #484f58;
+  font-size: 0.75rem;
+  user-select: none;
+  line-height: inherit;
+  border-right: 1px solid rgba(255,255,255,0.04);
+}
+/* 日志文本 — 强制左对齐 */
+.log-txt {
+  flex: 1;
+  word-break: break-all;
+  white-space: pre-wrap;
+  color: #c9d1d9;
+  text-align: left;
+}
+/* 日志区域整体左对齐 */
+.log-viewer-body {
+  text-align: left !important;
+}
+
+/* 日志选中文字 — 浅蓝底白字，清晰可读 */
+.log-viewer-body ::selection,
+.log-viewer-body *::selection {
+  background: rgba(88, 166, 255, 0.32) !important;
+  color: #fff !important;
+}
+
+/* ---- 日志级别着色 ---- */
+.log-fatal .log-txt { color: #ff7b72; font-weight: 600; }
+.log-error .log-txt { color: #ffa198; }
+.log-warn  .log-txt { color: #d29922; }
+.log-info  .log-txt { color: #58a6ff; }
+.log-debug .log-txt { color: #6e7681; }
+
+/* 时间戳高亮（行首 ISO 格式或括号时间）*/
+.log-line .log-txt::before {
+  content: '';
+}
+
+/* ---- Footer / 关闭按钮区 ---- */
+.swal2-log-actions {
+  padding: 10px 16px !important;
+  background: #161b22 !important;
+  border-top: 1px solid rgba(255,255,255,0.06) !important;
+  justify-content: flex-end !important;
+  margin: 0 !important;
+}
+.swal2-log-close {
+  background: rgba(88,166,255,0.12) !important;
+  color: #58a6ff !important;
+  border: 1px solid rgba(88,166,255,0.2) !important;
+  border-radius: 8px !important;
+  padding: 7px 22px !important;
+  font-size: 0.85rem !important;
+  font-weight: 500 !important;
+  font-family: -apple-system, 'SF Pro Text', sans-serif !important;
+  letter-spacing: -0.01em !important;
+  transition: all 0.15s ease !important;
+}
+.swal2-log-close:hover {
+  background: rgba(88,166,255,0.2) !important;
+  border-color: rgba(88,166,255,0.35) !important;
+}
+
+/* ---------- 22. 代理编辑弹窗（gpModal）苹果风美化 ---------------------- */
+#gpModal .modal-content {
+  background: rgba(255, 255, 255, 0.86);
+  -webkit-backdrop-filter: saturate(180%) blur(20px);
+  backdrop-filter: saturate(180%) blur(20px);
+  border: 1px solid var(--apple-sep);
+  border-radius: var(--apple-r-lg);
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.22), 0 0 1px rgba(0, 0, 0, 0.08);
+  overflow: hidden;
+}
+#gpModal .modal-header {
+  background: transparent;
+  border-bottom: 1px solid var(--apple-sep);
+  padding: 1.4rem 1.6rem 1.2rem;
+  align-items: center;
+}
+#gpModal .modal-title {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  font-size: 1.08rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--apple-text);
+}
+#gpModal .modal-title::before {
+  content: "\f0c2"; /* fa-server */
+  font-family: "Font Awesome 6 Free";
+  font-weight: 900;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+  border-radius: 11px;
+  background: linear-gradient(135deg, #0a84ff, var(--apple-blue));
+  color: #fff;
+  font-size: 0.95rem;
+  box-shadow: 0 5px 14px rgba(0, 113, 227, 0.32);
+}
+#gpModal .modal-body {
+  padding: 1.6rem 1.6rem 0.4rem;
+}
+#gpModal .modern-form-group {
+  margin-bottom: 1.1rem;
+}
+#gpModal .modern-form-group label {
+  font-size: 0.85rem;
+  color: var(--apple-text-2);
+  margin-bottom: 0.45rem;
+}
+#gpModal .go-proxy-modal-grid {
+  gap: 0 1.15rem;
+}
+#gpModal .go-proxy-modal-grid .modern-form-group {
+  margin-bottom: 1.1rem;
+}
+#gpModal .input-hint {
+  font-size: 0.78rem;
+  margin-top: 0.4rem;
+  color: var(--apple-text-3);
+}
+/* 苹果风自定义复选框（跳过 TLS） */
+#gpModal .gp-insecure-label {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--apple-text-2);
+  margin: 0.35rem 0 0.6rem;
+  cursor: pointer;
+  user-select: none;
+}
+#gpModal .gp-insecure-label input[type="checkbox"] {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  margin: 0;
+  border: 1.5px solid var(--apple-sep-strong);
+  border-radius: 6px;
+  background: var(--apple-surface);
+  cursor: pointer;
+  position: relative;
+  transition: background 0.18s var(--apple-ease-soft),
+              border-color 0.18s var(--apple-ease-soft),
+              box-shadow 0.18s var(--apple-ease-soft);
+}
+#gpModal .gp-insecure-label input[type="checkbox"]:checked {
+  background: var(--apple-blue);
+  border-color: var(--apple-blue);
+}
+#gpModal .gp-insecure-label input[type="checkbox"]:checked::after {
+  content: "\f00c"; /* fa-check */
+  font-family: "Font Awesome 6 Free";
+  font-weight: 900;
+  color: #fff;
+  font-size: 0.7rem;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+}
+#gpModal .gp-insecure-label input[type="checkbox"]:focus-visible {
+  box-shadow: 0 0 0 4px rgba(0, 113, 227, 0.18);
+}
+#gpModal .btn-close {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.05);
+  opacity: 0.55;
+  transition: all 0.18s var(--apple-ease-soft);
+}
+#gpModal .btn-close:hover {
+  opacity: 0.85;
+  background: rgba(0, 0, 0, 0.09);
+}
+/* 入场动画 */
+#gpModal.show .modal-content {
+  animation: apple-modal-in 0.32s var(--apple-ease-soft);
+}
+@keyframes apple-modal-in {
+  from { opacity: 0; transform: translateY(14px) scale(0.975); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+@media (prefers-reduced-motion: reduce) {
+  #gpModal.show .modal-content { animation: none; }
+}
+
+/* ---------- 23. 移动端适配（不破坏既有 slide-in）----------------------- */
+@media (max-width: 768px) {
+  .sidebar {
+    background: rgba(255, 255, 255, 0.82);
+    -webkit-backdrop-filter: saturate(180%) blur(20px);
+    backdrop-filter: saturate(180%) blur(20px);
+    border-right: 1px solid var(--apple-sep);
+  }
+  .content-area {
+    padding: 1.25rem 1rem;
+  }
+  .content-section {
+    padding: 1.25rem 1.1rem;
+  }
+  .welcome-banner {
+    padding: 1.75rem 1.5rem;
+  }
+  .welcome-title { font-size: 1.5rem; }
+  .dashboard-grid {
+    grid-template-columns: 1fr;
+  }
+  .page-title { font-size: 1.35rem; }
+}
+
+/* ---------- 20. 可访问性：尊重减弱动效偏好 ----------------------------- */
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.001ms !important;
+    transition-duration: 0.001ms !important;
+  }
+}
+
+/* ---------- 24. Swal 通用苹果风弹窗（alert/confirm 替代）----------------- */
+.swal2-apple-popup {
+  border-radius: var(--apple-r-lg) !important;
+  background: rgba(255,255,255,0.92) !important;
+  -webkit-backdrop-filter: saturate(180%) blur(20px);
+  backdrop-filter: saturate(180%) blur(20px);
+  border: 1px solid var(--apple-sep) !important;
+  box-shadow: 0 24px 60px rgba(0,0,0,0.18), 0 0 1px rgba(0,0,0,0.06) !important;
+  padding: 1.5rem !important;
+  font-family: -apple-system, 'SF Pro Text', 'PingFang SC', sans-serif !important;
+}
+.swal2-apple-popup .swal2-title {
+  font-size: 1.05rem !important;
+  font-weight: 600 !important;
+  color: var(--apple-text) !important;
+  letter-spacing: -0.01em !important;
+  margin-bottom: 0.3rem !important;
+}
+.swal2-apple-popup .swal2-html-container {
+  font-size: 0.9rem !important;
+  color: var(--apple-text-2) !important;
+  margin: 0.4rem 0 1.2rem !important;
+}
+.swal2-apple-btn {
+  background: var(--apple-blue) !important;
+  color: #fff !important;
+  border: none !important;
+  border-radius: var(--apple-r-pill) !important;
+  padding: 0.55rem 1.4rem !important;
+  font-size: 0.88rem !important;
+  font-weight: 500 !important;
+  box-shadow: 0 2px 8px rgba(0,113,227,0.22) !important;
+}
+.swal2-apple-btn:hover {
+  background: var(--apple-blue-hover) !important;
+  transform: translateY(-1px);
+}
+
+/* Swal 图标容器：去掉默认白色/浅色圆形背景 */
+.swal2-apple-popup .swal2-icon {
+  background: transparent !important;
+  border: none !important;
+}
+/* 成功图标：去掉 SweetAlert2 默认的浅绿色圆环背景 */
+.swal2-apple-popup .swal2-icon.swal2-success {
+  border: none !important;
+  background: transparent !important;
+}
+.swal2-apple-popup .swal2-success-circular-line-left,
+.swal2-apple-popup .swal2-success-circular-line-right,
+.swal2-apple-popup .swal2-success-fix {
+  display: none !important;
+}

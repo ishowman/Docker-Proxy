@@ -111,22 +111,26 @@ class ConfigServiceDB {
         {
           text: "首页",
           link: "/",
-          newTab: false
+          newTab: false,
+          icon: "fa-solid fa-house"
         },
         {
-          text: "文档",
-          link: "https://dqzboy.github.io/docs/",
-          newTab: true
+          text: "介绍",
+          link: "https://docker-proxy-desc.vercel.app/",
+          newTab: true,
+          icon: "fa-solid fa-book-open"
         },
         {
           text: "推广",
           link: "https://dqzboy.github.io/proxyui/zanzhu",
-          newTab: true
+          newTab: false,
+          icon: "fa-solid fa-bullhorn"
         },
         {
           text: "GitHub",
-          link: "https://github.com/dqzboy/Docker-Proxy",
-          newTab: true
+          link: "https://github.com/dqzboy/hubcmdui",
+          newTab: true,
+          icon: "fa-brands fa-github"
         }
       ],
       monitoringConfig: {

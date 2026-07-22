@@ -632,35 +632,96 @@ const dockerManager = {
         // 不需要特殊处理，使用原生select元素的change事件
     },
 
-    // 查看日志
+    // 查看日志 — 专业终端风格弹窗
     async showContainerLogs(containerId, containerName) {
         console.log('正在获取日志，容器ID:', containerId, '容器名称:', containerName);
         core.showLoading('正在加载日志...');
         try {
-            // 注意: 后端 /api/docker/containers/:id/logs 需要存在并返回日志文本
-            const response = await fetch(`/api/docker/containers/${containerId}/logs`); 
+            const response = await fetch(`/api/docker/containers/${containerId}/logs`);
             if (!response.ok) {
                 const errorData = await response.json().catch(() => ({ details: '无法解析错误响应' }));
                 throw new Error(errorData.details || `获取日志失败 (${response.status})`);
             }
-            const logs = await response.text();
+
+            // 使用 ArrayBuffer + TextDecoder 处理编码，替换非法 UTF-8 序列避免乱码
+            const buffer = await response.arrayBuffer();
+            const decoder = new TextDecoder('utf-8', { fatal: false });
+            let logs = decoder.decode(buffer);
+
+            // 清理不可打印控制字符（保留 \n \r \t），将残留乱码 � 替换为 □
+            logs = logs.replace(/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/g, '')
+                       .replace(/�/g, '□');
+
             core.hideLoading();
-            
+
+            // 日志级别着色 + 行号
+            const lines = logs.split('\n');
+            const maxDigits = String(lines.length).length;
+            const htmlLines = lines.map((line, i) => {
+                let cls = 'log-line';
+                let styled = this._escapeHtml(line) || '&nbsp;';
+                // 级别检测与着色
+                if (/\b(FATAL|PANIC)\b/i.test(line)) { cls += ' log-fatal'; }
+                else if (/\b(ERROR|ERR|FAILED|FAIL|Exception|panic\(|fatal\()\b/i.test(line)) { cls += ' log-error'; }
+                else if (/\b(WARN|WARNING)\b/i.test(line)) { cls += ' log-warn'; }
+                else if (/\b(INFO|started|listening|updated|configured|initiali)/i.test(line)) { cls += ' log-info'; }
+                else if (/\b(DEBUG|trace|verbose)\b/i.test(line)) { cls += ' log-debug'; }
+                const num = String(i + 1).padStart(maxDigits, '\u00A0');
+                return `<div class="${cls}"><span class="log-ln">${num}</span><span class="log-txt">${styled}</span></div>`;
+            }).join('');
+
             Swal.fire({
-                title: `容器日志: ${containerName || containerId.substring(0, 6)}`,
-                html: `<pre class="container-logs">${logs.replace(/</g, "&lt;").replace(/>/g, "&gt;")}</pre>`,
-                width: '80%',
+                title: '',
+                html: `
+                  <div class="log-viewer-header">
+                    <div class="log-viewer-title-row">
+                      <span class="log-viewer-icon">⬡</span>
+                      <span class="log-viewer-name">${this._escapeHtml(containerName || containerId.substring(0, 12))}</span>
+                      <span class="log-viewer-badge">${lines.length} 行</span>
+                    </div>
+                    <button class="log-copy-btn" id="logCopyBtn" title="复制全部日志">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+                      复制
+                    </button>
+                  </div>
+                  <div class="log-viewer-body" id="logViewerBody">${htmlLines}</div>`,
+                width: '82%',
                 customClass: {
-                    htmlContainer: 'swal2-logs-container',
-                    popup: 'swal2-logs-popup'
+                    popup: 'swal2-log-terminal',
+                    htmlContainer: 'swal2-log-body',
+                    actions: 'swal2-log-actions',
+                    confirmButton: 'swal2-log-close'
                 },
-                confirmButtonText: '关闭'
+                confirmButtonText: '关闭',
+                showCloseButton: false,
+                didOpen: () => {
+                    const btn = document.getElementById('logCopyBtn');
+                    if (btn) {
+                        btn.addEventListener('click', () => {
+                            navigator.clipboard.writeText(logs).then(() => {
+                                btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> 已复制';
+                                btn.classList.add('copied');
+                                setTimeout(() => {
+                                    btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012-2v1"/></svg> 复制';
+                                    btn.classList.remove('copied');
+                                }, 2000);
+                            });
+                        });
+                    }
+                    // 滚动到底部
+                    const body = document.getElementById('logViewerBody');
+                    if (body) body.scrollTop = body.scrollHeight;
+                }
             });
         } catch (error) {
             core.hideLoading();
             core.showAlert(`查看日志失败: ${error.message}`, 'error');
             console.error(`[dockerManager] Error fetching logs for ${containerId}:`, error);
         }
+    },
+
+    _escapeHtml(str) {
+        return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
     },
     
     // 显示容器详情 (示例：用 SweetAlert 显示)
@@ -997,8 +1058,11 @@ const dockerManager = {
                             window.systemStatus.showDockerHelp();
                         } else {
                             console.error('[dockerManager] systemStatus.showDockerHelp is not available.');
-                            // 可以提供一个备用提示
-                            alert('无法显示帮助信息，请检查控制台。');
+                            if (typeof Swal !== 'undefined') {
+                                Swal.fire({ icon: 'info', title: '提示', text: '无法显示帮助信息，请检查控制台。', confirmButtonText: '确定' });
+                            } else {
+                                alert('无法显示帮助信息，请检查控制台。');
+                            }
                         }
                     });
                     console.log('[dockerManager] Troubleshoot button event listener bound.');

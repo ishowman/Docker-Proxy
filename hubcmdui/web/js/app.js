@@ -163,8 +163,12 @@ function loadMonitoringConfig() {
             if (typeof core !== 'undefined' && core && typeof core.showAlert === 'function') {
                 core.showAlert('加载监控配置失败: ' + error.message, 'error');
             } else {
-                // 如果core未定义，使用alert作为备选
-                alert('加载监控配置失败: ' + error.message);
+                // 如果core未定义，使用Swal作为备选
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire({ icon: 'error', title: '加载失败', text: '加载监控配置失败: ' + error.message, confirmButtonText: '确定' });
+                } else {
+                    alert('加载监控配置失败: ' + error.message);
+                }
             }
         });
 }

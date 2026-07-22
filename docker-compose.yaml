@@ -34,8 +34,8 @@ services:
       # - NO_PROXY=localhost,127.0.0.1,.local
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-      # SQLite 数据库文件（命名卷，无需本地目录）
-      - hubcmd-ui-data:/app/data
+      # SQLite 数据库等运行时数据
+      - ./data/hubcmd-ui:/app/data
     ports:
       - 30080:3000
     networks:
@@ -43,6 +43,3 @@ services:
 
 networks:
   registry-net:
-
-volumes:
-  hubcmd-ui-data:

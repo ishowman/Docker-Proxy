@@ -4575,10 +4575,13 @@
             }
         }
     </style>
+
+    <!-- Apple 风格后台界面设计系统（最后加载以覆盖内联与其他样式表） -->
+    <link rel="stylesheet" href="css/apple-admin.css">
 </head>
 <body>
     <div id="loadingSpinner" class="loading-spinner" style="display: none;"></div>
-    <div id="loadingIndicator" style="display: flex; justify-content: center; align-items: center; height: 100vh;">
+    <div id="loadingIndicator" style="display: none; justify-content: center; align-items: center; height: 100vh;">
         <p>加载中...</p>
     </div>
     <div class="admin-container" id="adminContainer" style="display: none;">
@@ -5483,14 +5486,19 @@
                         </div>
                         <div style="display: flex; gap: 0.75rem; margin-top: 1rem;">
                             <label class="toggle-switch" style="margin: 0;">
-                                <input type="checkbox" 
-                                       id="registry-enabled-${config.registryId}" 
-                                       ${isEnabled ? 'checked' : ''} 
+                                <input type="checkbox"
+                                       id="registry-enabled-${config.registryId}"
+                                       ${isEnabled ? 'checked' : ''}
                                        onchange="event.stopPropagation(); toggleRegistryEnabled('${config.registryId}', this.checked)">
                                 <span class="toggle-slider"></span>
                             </label>
                             <span style="font-size: 0.85rem; color: #64748b; line-height: 26px;">启用此 Registry</span>
                         </div>
+                        <button type="button"
+                                class="registry-card-save-btn"
+                                onclick="saveSingleRegistryConfig('${config.registryId}')">
+                            <i class="fas fa-save"></i> 保存配置
+                        </button>
                     </div>
                 </div>
             `;
@@ -5574,6 +5582,9 @@
                 if (validationError) {
                     if (window.app && typeof window.app.showNotification === 'function') {
                         window.app.showNotification(validationError, 'error');
+                    } else if (typeof Swal !== 'undefined') {
+                        Swal.fire({ icon: 'error', title: '校验失败', text: validationError, confirmButtonText: '确定',
+                            customClass: { popup: 'swal2-apple-popup', confirmButton: 'swal2-apple-btn' } });
                     } else {
                         alert(validationError);
                     }
@@ -5595,6 +5606,9 @@
                 if (response.ok) {
                     if (window.app && typeof window.app.showNotification === 'function') {
                         window.app.showNotification('Registry 配置保存成功', 'success');
+                    } else if (typeof Swal !== 'undefined') {
+                        Swal.fire({ icon: 'success', title: '保存成功', text: 'Registry 配置已保存', confirmButtonText: '确定',
+                            customClass: { popup: 'swal2-apple-popup', confirmButton: 'swal2-apple-btn' } });
                     } else {
                         alert('Registry 配置保存成功');
                     }
@@ -5608,8 +5622,79 @@
                 console.error('saveRegistryConfigs error:', error);
                 if (window.app && typeof window.app.showNotification === 'function') {
                     window.app.showNotification(error.message || '保存 Registry 配置失败', 'error');
+                } else if (typeof Swal !== 'undefined') {
+                    Swal.fire({ icon: 'error', title: '保存失败', text: error.message || '保存 Registry 配置失败', confirmButtonText: '确定',
+                        customClass: { popup: 'swal2-apple-popup', confirmButton: 'swal2-apple-btn' } });
                 } else {
                     alert(error.message || '保存 Registry 配置失败');
+                }
+            }
+        }
+
+        // 保存单张 Registry 卡片配置（从每张卡片的"保存配置"按钮调用）
+        async function saveSingleRegistryConfig(registryId) {
+            const config = registryConfigs.find(c => c.registryId === registryId);
+            if (!config) {
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire({ icon: 'warning', title: '未找到配置', text: '未找到 Registry 配置', confirmButtonText: '确定',
+                        customClass: { popup: 'swal2-apple-popup', confirmButton: 'swal2-apple-btn' } });
+                } else {
+                    alert('未找到 Registry 配置');
+                }
+                return;
+            }
+
+            try {
+                const enabledCheckbox = document.getElementById(`registry-enabled-${registryId}`);
+                const proxyInput = document.getElementById(`registry-proxy-${registryId}`);
+
+                const enabled = enabledCheckbox ? enabledCheckbox.checked : config.enabled;
+                const proxyUrl = proxyInput ? proxyInput.value.trim() : (config.proxyUrl || '');
+
+                // 代理地址始终为必填字段
+                if (!proxyUrl) {
+                    if (typeof Swal !== 'undefined') {
+                        Swal.fire({ icon: 'warning', title: '信息不完整', text: `请填写 ${config.name} 的代理地址`, confirmButtonText: '确定',
+                            customClass: { popup: 'swal2-apple-popup', confirmButton: 'swal2-apple-btn' } });
+                    } else if (window.app && typeof window.app.showNotification === 'function') {
+                        window.app.showNotification(`请填写 ${config.name} 的代理地址`, 'error');
+                    } else {
+                        alert(`请填写 ${config.name} 的代理地址`);
+                    }
+                    return;
+                }
+
+                const response = await fetch('/api/config/registry-configs', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        configs: [{ registryId, enabled, proxyUrl }]
+                    })
+                });
+
+                if (response.ok) {
+                    if (window.app && typeof window.app.showNotification === 'function') {
+                        window.app.showNotification(`${config.name} 配置保存成功`, 'success');
+                    } else if (typeof Swal !== 'undefined') {
+                        Swal.fire({ icon: 'success', title: '保存成功', text: `${config.name} 配置已保存`, confirmButtonText: '确定',
+                            customClass: { popup: 'swal2-apple-popup', confirmButton: 'swal2-apple-btn' } });
+                    } else {
+                        alert(`${config.name} 配置保存成功`);
+                    }
+                    await loadRegistryConfigs();
+                } else {
+                    const error = await response.json();
+                    throw new Error(error.details || error.message || '保存失败');
+                }
+            } catch (error) {
+                console.error('saveSingleRegistryConfig error:', error);
+                if (window.app && typeof window.app.showNotification === 'function') {
+                    window.app.showNotification(error.message || '保存失败', 'error');
+                } else if (typeof Swal !== 'undefined') {
+                    Swal.fire({ icon: 'error', title: '保存失败', text: error.message || '保存失败', confirmButtonText: '确定',
+                        customClass: { popup: 'swal2-apple-popup', confirmButton: 'swal2-apple-btn' } });
+                } else {
+                    alert(error.message || '保存失败');
                 }
             }
         }
@@ -5667,6 +5752,7 @@
             // 将 Registry 相关函数暴露到 window 对象
             window.loadRegistryConfigs = loadRegistryConfigs;
             window.saveRegistryConfigs = saveRegistryConfigs;
+            window.saveSingleRegistryConfig = saveSingleRegistryConfig;
             window.toggleRegistryEnabled = toggleRegistryEnabled;
             window.toggleRegistryBody = toggleRegistryBody;
             window.renderRegistryConfigs = renderRegistryConfigs;
