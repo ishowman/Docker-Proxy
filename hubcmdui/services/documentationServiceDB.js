@@ -11,7 +11,8 @@ class DocumentationServiceDB {
   async getDocumentationList() {
     try {
       const documents = await database.all(
-        'SELECT doc_id, title, published, created_at, updated_at FROM documents ORDER BY updated_at DESC'
+        'SELECT doc_id, title, published, created_at, updated_at FROM documents ORDER BY CASE WHEN title LIKE ? THEN 0 ELSE 1 END, updated_at DESC',
+        ['欢迎使用%']
       );
       
       return documents.map(doc => ({
@@ -33,7 +34,8 @@ class DocumentationServiceDB {
   async getPublishedDocuments() {
     try {
       const documents = await database.all(
-        'SELECT doc_id, title, published, created_at, updated_at FROM documents WHERE published = 1 ORDER BY updated_at DESC'
+        'SELECT doc_id, title, published, created_at, updated_at FROM documents WHERE published = 1 ORDER BY CASE WHEN title LIKE ? THEN 0 ELSE 1 END, updated_at DESC',
+        ['欢迎使用%']
       );
       
       return documents.map(doc => ({
@@ -201,7 +203,8 @@ class DocumentationServiceDB {
         sql += ' AND published = 1';
       }
       
-      sql += ' ORDER BY updated_at DESC';
+      sql += ' ORDER BY CASE WHEN title LIKE ? THEN 0 ELSE 1 END, updated_at DESC';
+      params.push('欢迎使用%');
       
       const documents = await database.all(sql, params);
       

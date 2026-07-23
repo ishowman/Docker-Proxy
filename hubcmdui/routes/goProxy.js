@@ -8,7 +8,8 @@ const express = require('express');
 const router = express.Router();
 const logger = require('../logger');
 const { requireLogin } = require('../middleware/auth');
-const { goProxyService, upstreamError } = require('../services/goProxyService');
+const { goProxyService, upstreamError, ADMIN_BASE } = require('../services/goProxyService');
+const registryCredentialService = require('../services/registryCredentialService');
 
 // 获取当前代理配置
 router.get('/config', async (req, res) => {
@@ -30,6 +31,8 @@ router.put('/config', requireLogin, async (req, res) => {
       return res.status(400).json({ error: '配置格式错误：必须包含非空的 registries 数组' });
     }
     const result = await goProxyService.putConfig(cfg);
+    // 同步代理管理里配置的 Basic 认证到内部凭证表（供镜像搜索/标签查看复用）
+    await registryCredentialService.syncFromGoProxyConfig(cfg);
     res.json(result);
   } catch (e) {
     logger.error('保存 Go 代理配置失败:', e.message);
@@ -54,9 +57,9 @@ router.post('/reload', requireLogin, async (req, res) => {
 router.get('/status', async (req, res) => {
   try {
     const s = await goProxyService.status();
-    res.json(s);
+    res.json({ ...s, adminUrl: ADMIN_BASE });
   } catch (e) {
-    res.status(502).json({ reachable: false, error: e.message });
+    res.status(502).json({ reachable: false, error: e.message, adminUrl: ADMIN_BASE });
   }
 });
 

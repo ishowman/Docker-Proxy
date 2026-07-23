@@ -13,8 +13,7 @@ async function checkFilesAndDirectories() {
   // 检查必要的目录
   const requiredDirs = [
     { path: 'logs', critical: true },
-    { path: 'documentation', critical: true },
-    { path: 'web/images', critical: true },
+    { path: 'web/dist', critical: true },
     { path: 'routes', critical: true },
     { path: 'services', critical: true },
     { path: 'middleware', critical: true },
@@ -37,15 +36,12 @@ async function checkFilesAndDirectories() {
   // 检查必要的文件
   const requiredFiles = [
     { path: 'server.js', critical: true },
-    { path: 'app.js', critical: false },
     { path: 'config.js', critical: true },
     { path: 'logger.js', critical: true },
     { path: 'init-dirs.js', critical: true },
     { path: 'download-images.js', critical: true },
     { path: 'cleanup.js', critical: true },
-    { path: 'package.json', critical: true },
-    { path: 'web/index.html', critical: true },
-    { path: 'web/admin.html', critical: true }
+    { path: 'package.json', critical: true }
   ];
   
   const filesStatus = {};

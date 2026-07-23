@@ -1,0 +1,125 @@
+import axios from 'axios'
+
+const api = axios.create({
+  baseURL: '/api',
+  withCredentials: true
+})
+
+api.interceptors.response.use(
+  (res) => res,
+  (err) => {
+    if (err.response && err.response.status === 401) {
+      // 会话过期，交给调用方处理
+    }
+    return Promise.reject(err)
+  }
+)
+
+// ============ 鉴权 ============
+export const getCaptcha = () => api.get('/captcha').then(r => r.data)
+export const login = (payload) => {
+  const { username, password, captcha } = payload || {}
+  return api.post('/login', { username, password, captcha }).then(r => r.data)
+}
+export const logout = () => api.post('/logout').then(r => r.data)
+export const checkSession = () => api.get('/check-session').then(r => r.data)
+export const changePassword = (currentPassword, newPassword) =>
+  api.post('/change-password', { currentPassword, newPassword }).then(r => r.data)
+export const changeUsername = (newUsername, password) =>
+  api.post('/change-username', { newUsername, password }).then(r => r.data)
+export const getUserInfo = () => api.get('/user-info').then(r => r.data)
+export const requestResetToken = (username, captcha) =>
+  api.post('/request-reset-token', { username, captcha }).then(r => r.data)
+export const resetPassword = (token, newPassword, confirmPassword) =>
+  api.post('/reset-password', { token, newPassword, confirmPassword }).then(r => r.data)
+export const validateResetToken = (token) =>
+  api.post('/validate-reset-token', { token }).then(r => r.data)
+
+// ============ 配置 / 菜单 / Registry ============
+export const getConfig = () => api.get('/config').then(r => r.data)
+// 站点锁定信息（GitHub 地址等，后端加密存储且不可更改）
+export const getSiteInfo = () => api.get('/site').then(r => r.data)
+export const saveConfig = (cfg) => api.post('/config', cfg).then(r => r.data)
+export const getMenuItems = () => api.get('/menu/items').then(r => r.data)
+export const saveMenuItems = (menuItems) =>
+  api.post('/menu/items', { menuItems }).then(r => r.data)
+export const getRegistryConfigs = () => api.get('/config/registry-configs').then(r => r.data)
+export const getEnabledRegistryConfigs = () =>
+  api.get('/config/registry-configs/enabled').then(r => r.data)
+export const updateRegistryConfig = (registryId, cfg) =>
+  api.put(`/config/registry-configs/${registryId}`, cfg).then(r => r.data)
+export const batchUpdateRegistryConfigs = (configs) =>
+  api.post('/config/registry-configs', { configs }).then(r => r.data)
+
+// ============ 系统 / 网络测试 ============
+export const getSystemResources = () => api.get('/system-resources').then(r => r.data)
+// 资源指标历史（后端落库，跨设备/跨会话统一；默认近 24 小时）
+export const getMetricsHistory = (hours = 24) =>
+  api.get('/metrics/history', { params: { hours } }).then(r => r.data)
+export const getSystemResourceDetails = () =>
+  api.get('/system-resource-details').then(r => r.data)
+export const getDiskSpace = () => api.get('/disk-space').then(r => r.data)
+export const networkTest = (domain, type) =>
+  api.post('/network-test', { domain, type }).then(r => r.data)
+
+// ============ Docker 容器 ============
+export const getDockerStatus = () => api.get('/docker/status').then(r => r.data)
+export const getContainerStatus = (id) => api.get(`/docker/status/${id}`).then(r => r.data)
+export const getStoppedContainers = () => api.get('/docker/stopped').then(r => r.data)
+export const startContainer = (id) => api.post(`/docker/containers/${id}/start`).then(r => r.data)
+export const stopContainer = (id) => api.post(`/docker/containers/${id}/stop`).then(r => r.data)
+export const restartContainer = (id) => api.post(`/docker/containers/${id}/restart`).then(r => r.data)
+export const deleteContainer = (id) => api.post(`/docker/containers/${id}/remove`).then(r => r.data)
+export const updateContainer = (id, image) =>
+  api.post(`/docker/containers/${id}/update`, { image }).then(r => r.data)
+export const getContainerLogs = (id) => api.get(`/docker/logs-poll/${id}`).then(r => r.data)
+
+// ============ 镜像搜索（多 Registry） ============
+export const getRegistryList = () => api.get('/registry/list').then(r => r.data)
+export const searchAllRegistries = (term, page = 1, limit = 10) =>
+  api.get('/registry/search-all', { params: { term, page, limit } }).then(r => r.data)
+export const searchRegistry = (registryId, term, page = 1, limit = 25) =>
+  api.get(`/registry/search/${registryId}`, { params: { term, page, limit } }).then(r => r.data)
+export const getImageTags = (registryId, name, page = 1, limit = 100) =>
+  api.get(`/registry/tags/${registryId}`, { params: { name, page, limit } }).then(r => r.data)
+export const getTagCount = (registryId, name) =>
+  api.get(`/registry/tag-count/${registryId}`, { params: { name } }).then(r => r.data)
+
+// ============ Docker Hub 搜索 ============
+export const searchDockerHub = (term, page = 1, limit = 25) =>
+  api.get('/dockerhub/search', { params: { term, page, limit } }).then(r => r.data)
+export const getDockerHubTags = (owner, repo, page = 1, limit = 25) =>
+  api.get(`/dockerhub/tags/${owner}/${repo}`, { params: { page, limit } }).then(r => r.data)
+
+// ============ 文档（公开） ============
+export const getPublishedDocs = () => api.get('/documentation/published').then(r => r.data)
+export const getPublicDoc = (id) => api.get(`/documentation/${id}`).then(r => r.data)
+
+// ============ 文档（后台管理） ============
+export const listDocuments = () => api.get('/documentation/documents').then(r => r.data)
+export const getDocument = (id) => api.get(`/documentation/documents/${id}`).then(r => r.data)
+export const createDocument = (doc) => api.post('/documentation/documents', doc).then(r => r.data)
+export const saveDocument = (id, doc) =>
+  api.put(`/documentation/documents/${id}`, doc).then(r => r.data)
+export const deleteDocument = (id) => api.delete(`/documentation/documents/${id}`).then(r => r.data)
+export const togglePublish = (id) =>
+  api.put(`/documentation/toggle-publish/${id}`).then(r => r.data)
+
+// ============ Go 代理 ============
+export const getGoConfig = () => api.get('/goProxy/config').then(r => r.data)
+export const saveGoConfig = (cfg) => api.put('/goProxy/config', cfg).then(r => r.data)
+export const reloadGoProxy = () => api.post('/goProxy/reload').then(r => r.data)
+export const goProxyStatus = () => api.get('/goProxy/status').then(r => r.data)
+
+// ============ 监控 ============
+export const getMonitoringConfig = () => api.get('/monitoring-config').then(r => r.data)
+export const saveMonitoringConfig = (cfg) =>
+  api.post('/monitoring-config', cfg).then(r => r.data)
+export const toggleMonitoring = (isEnabled) =>
+  api.post('/toggle-monitoring', { isEnabled }).then(r => r.data)
+export const getStoppedContainersForMonitor = () =>
+  api.get('/stopped-containers').then(r => r.data)
+export const testNotification = (cfg) =>
+  api.post('/test-notification', cfg).then(r => r.data)
+
+export default api

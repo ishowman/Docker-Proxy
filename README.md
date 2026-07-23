@@ -98,7 +98,7 @@ bash -c "$(curl -fsSL https://ghp.ci/https://raw.githubusercontent.com/dqzboy/Do
 
 ## 💻 Hubcmd-UI
 
-> HubCMD-UI 手动安装教程：[点击查看教程](hubcmdui/README.md)
+- **默认账户**: `root` / `admin@123`
 
 <br/>
 <table>
@@ -107,24 +107,24 @@ bash -c "$(curl -fsSL https://ghp.ci/https://raw.githubusercontent.com/dqzboy/Do
       <td width="50%" align="center"><b>镜像搜索</b></td>
     </tr>
     <tr>
-        <td width="50%" align="center"><img src="https://cdn.jsdelivr.net/gh/dqzboy/Images/dqzboy-proxy/hubcmd-ui_01.png?raw=true"></td>
-        <td width="50%" align="center"><img src="https://cdn.jsdelivr.net/gh/dqzboy/Images/dqzboy-proxy/hubcmd-ui_02.png?raw=true"></td>
+        <td width="50%" align="center"><img src="https://cdn.jsdelivr.net/gh/dqzboy/Images/picture/hubcmdui-images.png?raw=true"></td>
+        <td width="50%" align="center"><img src="https://cdn.jsdelivr.net/gh/dqzboy/Images/picture/hubcmdui-images-search.png?raw=true"></td>
     </tr>
     <tr>
-      <td width="50%" align="center"><b>文档管理</b></td>
-      <td width="50%" align="center"><b>TAG搜索</b></td>
+      <td width="50%" align="center"><b>Registry 管理</b></td>
+      <td width="50%" align="center"><b>Registry 配置</b></td>
     </tr>
     <tr>
-        <td width="50%" align="center"><img src="https://cdn.jsdelivr.net/gh/dqzboy/Images/dqzboy-proxy/hubcmd-ui_03.png?raw=true"></td>
-        <td width="50%" align="center"><img src="https://cdn.jsdelivr.net/gh/dqzboy/Images/dqzboy-proxy/hubcmd-ui_11.png?raw=true"></td>
+        <td width="50%" align="center"><img src="https://cdn.jsdelivr.net/gh/dqzboy/Images/picture/hubcmdui-go-config.png?raw=true"></td>
+        <td width="50%" align="center"><img src="https://cdn.jsdelivr.net/gh/dqzboy/Images/picture/hubcmdui-registry-manager.png?raw=true"></td>
     </tr>
     <tr>
-      <td width="50%" align="center"><b>平台配置</b></td>
-      <td width="50%" align="center"><b>代理管理</b></td>
+      <td width="50%" align="center"><b>容器管理</b></td>
+      <td width="50%" align="center"><b>监控告警</b></td>
     </tr>
     <tr>
-        <td width="50%" align="center"><img src="https://cdn.jsdelivr.net/gh/dqzboy/Images/picture/docker-proxy02.png?raw=true"></td>
-        <td width="50%" align="center"><img src="https://cdn.jsdelivr.net/gh/dqzboy/Images/picture/docker-proxy01.png?raw=true"></td>
+        <td width="50%" align="center"><img src="https://cdn.jsdelivr.net/gh/dqzboy/Images/picture/hubcmdui-docker-manager.png?raw=true"></td>
+        <td width="50%" align="center"><img src="https://cdn.jsdelivr.net/gh/dqzboy/Images/picture/hubcmdui-alter.png?raw=true"></td>
     </tr>
 </table>
 

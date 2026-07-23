@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="zh-CN" class="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Docker 镜像加速服务</title>
+    <link rel="icon" type="image/png" href="/images/favicon.png" />
+    <link rel="icon" type="image/png" sizes="256x256" href="/images/favicon-256.png" />
+    <link rel="apple-touch-icon" href="/images/favicon-256.png" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
+    <!-- 首屏防闪烁：在主题样式表（经 JS 注入）加载前，先同步确定主题并铺好底色，
+         避免刷新时「白屏闪一下」后再切到深色主题的不平滑体验。
+         逻辑与 src/composables/useTheme.js 保持一致：localStorage('hubcmdui.theme') 默认 'auto' → 跟随系统 -->
+    <script>
+      (function () {
+        try {
+          var t = localStorage.getItem('hubcmdui.theme') || 'auto';
+          var eff = t;
+          if (t === 'auto') {
+            eff = (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light';
+          }
+          var html = document.documentElement;
+          if (eff === 'dark') html.classList.add('dark');
+          else html.classList.remove('dark');
+          html.setAttribute('data-theme', eff);
+        } catch (e) {}
+      })();
+    </script>
+    <style>
+      /* 关键 CSS（Critical CSS）：在 theme.css 经 JS 注入前立即铺底色，消除刷新白闪。
+         颜色值与 src/styles/theme.css 中 --bg-page / --fg 完全一致，JS 注入后无缝衔接、无二次跳变 */
+      html.dark, html.dark body, html.dark #app { background: #0f172a; color: #e2e8f0; }
+      html:not(.dark), html:not(.dark) body, html:not(.dark) #app { background: #f1f5f9; color: #0f172a; }
+      html, body, #app { margin: 0; padding: 0; min-height: 100vh; }
+    </style>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module" src="/main.js"></script>
+  </body>
+</html>

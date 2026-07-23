@@ -6,7 +6,7 @@
   <p align="center">
   <img src="https://github.com/dqzboy/Docker-Proxy/assets/42825450/c187d66f-152e-4172-8268-e54bd77d48bb" width="230px" height="200px">
       <br>
-      <i>Build your own Docker image acceleration service and deploy Docker, Kubernetes, Quay, Ghcr, Mcr, Elastic, NVCR, and other image acceleration and management services with a single click.</i>
+      <i>Self-hosted Docker image acceleration service — one-click deployment of image acceleration & management for Docker, K8s, Quay, GHCR, MCR, Elastic, NVCR, and more.</i>
   </p>
 </div>
 
@@ -51,14 +51,14 @@
 - [x] **One-click deployment**: Automatically checks and installs Docker / Compose dependencies, supporting both the image-pull mode (`docker-compose.yaml`) and the source-build mode (`docker-compose-build.yaml`).
 - [x] **Optional reverse proxy**: Automatically deploys Nginx or Caddy as a reverse proxy and renders the corresponding configuration (HTTPS, Host rewriting).
 - [x] **Upstream account authentication**: You can configure an upstream username/password; the proxy server exchanges them for a Bearer Token, enabling pulls of private Docker Hub images and mitigating official rate limits.
-- [x] **HubCMD-UI management panel**: On the web interface, you can directly add, delete, and modify proxies, configure server parameters, and perform hot reloading; it also includes image search, documentation tutorials, container management, monitoring, and alerting.
-- [x] **Cross-platform images**: Supports deployment on mainstream system architectures such as `linux/amd64` and `linux/arm64`.
+- [x] **HubCMD-UI management panel**: Manage proxies, configure server parameters, and hot-reload directly from the web UI; includes image search, documentation tutorials, container management, monitoring, and alerting.
+- [x] **Cross-platform images**: Supports deployment on mainstream architectures such as `linux/amd64` and `linux/arm64`.
 - [x] **Daily operations management**: Provides full lifecycle management including service start / stop / restart / logs / update / uninstall.
 
 ## 📦 Deployment
 
 ### Docker Deployment
-Directly download [`docker-compose.yaml`](./docker-compose.yaml) and run:
+Download [`docker-compose.yaml`](./docker-compose.yaml) and run:
 ```bash
 docker compose up -d
 ```
@@ -74,7 +74,14 @@ yum -y install curl
 # ubuntu && debian
 apt -y install curl
 
+# Overseas environment
 bash -c "$(curl -fsSL https://raw.githubusercontent.com/dqzboy/Docker-Proxy/main/install/DockerProxy_Install.sh)"
+
+# Domestic environment (CDN acceleration)
+bash -c "$(curl -fsSL https://cdn.jsdelivr.net/gh/dqzboy/Docker-Proxy/install/DockerProxy_Install.sh)"
+
+# Domestic GitHub proxy
+bash -c "$(curl -fsSL https://ghp.ci/https://raw.githubusercontent.com/dqzboy/Docker-Proxy/main/install/DockerProxy_Install.sh)"
 ```
 
 > The script automatically: checks and installs Docker / Docker Compose; generates a random `GO_PROXY_ADMIN_TOKEN` and writes it to `.env`; optionally deploys Nginx / Caddy reverse proxy.
@@ -82,16 +89,16 @@ bash -c "$(curl -fsSL https://raw.githubusercontent.com/dqzboy/Docker-Proxy/main
 After deployment, visit `http://<server-IP>:30080/admin` to manage proxies and server parameters from the web UI (you must register an admin account on first use; there is no built-in default account).
 
 ### Config persistence & upgrades (Important)
-The config file is mounted on the host at the `./config/go-proxy/` directory (inside the container: `/app/config.d/config.yaml`).
+The config file is mounted on the host at `./config/go-proxy/` (inside the container: `/app/config.d/config.yaml`).
 
 - On first start, if the host does not yet have a config file, the container automatically initializes one from the built-in default config — no manual creation needed.
-- To restore the default config: delete `./config/go-proxy/config.yaml` and recreate the container to re-seed it.
+- To restore the default config: delete `./config/go-proxy/config.yaml` and recreate the container to re-seed.
 
 ---
 
 ## 💻 Hubcmd-UI
 
-> HubCMD-UI manual installation tutorial: [Click to view tutorial](hubcmdui/README.md)
+**Default account**: root / admin@123
 
 <br/>
 <table>
@@ -100,24 +107,24 @@ The config file is mounted on the host at the `./config/go-proxy/` directory (in
       <td width="50%" align="center"><b>Image Search</b></td>
     </tr>
     <tr>
-        <td width="50%" align="center"><img src="https://cdn.jsdelivr.net/gh/dqzboy/Images/dqzboy-proxy/hubcmd-ui_01.png?raw=true"></td>
-        <td width="50%" align="center"><img src="https://cdn.jsdelivr.net/gh/dqzboy/Images/dqzboy-proxy/hubcmd-ui_02.png?raw=true"></td>
+        <td width="50%" align="center"><img src="https://cdn.jsdelivr.net/gh/dqzboy/Images/picture/hubcmdui-images.png?raw=true"></td>
+        <td width="50%" align="center"><img src="https://cdn.jsdelivr.net/gh/dqzboy/Images/picture/hubcmdui-images-search.png?raw=true"></td>
     </tr>
     <tr>
-      <td width="50%" align="center"><b>Document Management</b></td>
-      <td width="50%" align="center"><b>TAG Search</b></td>
+      <td width="50%" align="center"><b>Registry Management</b></td>
+      <td width="50%" align="center"><b>Registry Configuration</b></td>
     </tr>
     <tr>
-        <td width="50%" align="center"><img src="https://cdn.jsdelivr.net/gh/dqzboy/Images/dqzboy-proxy/hubcmd-ui_03.png?raw=true"></td>
-        <td width="50%" align="center"><img src="https://cdn.jsdelivr.net/gh/dqzboy/Images/dqzboy-proxy/hubcmd-ui_11.png?raw=true"></td>
+        <td width="50%" align="center"><img src="https://cdn.jsdelivr.net/gh/dqzboy/Images/picture/hubcmdui-go-config.png?raw=true"></td>
+        <td width="50%" align="center"><img src="https://cdn.jsdelivr.net/gh/dqzboy/Images/picture/hubcmdui-registry-manager.png?raw=true"></td>
     </tr>
     <tr>
-      <td width="50%" align="center"><b>Platform Configuration</b></td>
-      <td width="50%" align="center"><b>Proxy Management</b></td>
+      <td width="50%" align="center"><b>Container Management</b></td>
+      <td width="50%" align="center"><b>Monitoring & Alerting</b></td>
     </tr>
     <tr>
-        <td width="50%" align="center"><img src="https://cdn.jsdelivr.net/gh/dqzboy/Images/picture/docker-proxy02.png?raw=true"></td>
-        <td width="50%" align="center"><img src="https://cdn.jsdelivr.net/gh/dqzboy/Images/picture/docker-proxy01.png?raw=true"></td>
+        <td width="50%" align="center"><img src="https://cdn.jsdelivr.net/gh/dqzboy/Images/picture/hubcmdui-docker-manager.png?raw=true"></td>
+        <td width="50%" align="center"><img src="https://cdn.jsdelivr.net/gh/dqzboy/Images/picture/hubcmdui-alter.png?raw=true"></td>
     </tr>
 </table>
 

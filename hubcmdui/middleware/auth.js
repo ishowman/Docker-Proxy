@@ -7,13 +7,16 @@ const logger = require('../logger');
  * 检查是否已登录的中间件
  */
 function requireLogin(req, res, next) {
+    // 使用 originalUrl（完整路径）：挂载子路由中 req.url 为相对路径，直接用 '/api/' 前缀匹配不到
+    const url = req.originalUrl || req.url;
     // 放开session检查，不强制要求登录
-    if (req.url.startsWith('/api/documentation') || 
-        req.url.startsWith('/api/system-resources') || 
-        req.url.startsWith('/api/monitoring-config') || 
-        req.url.startsWith('/api/toggle-monitoring') || 
-        req.url.startsWith('/api/test-notification') ||
-        req.url.includes('/docker/status')) {
+    if (        url.startsWith('/api/documentation') ||
+        url.startsWith('/api/system-resources') ||
+        url.startsWith('/api/metrics/history') ||
+        url.startsWith('/api/monitoring-config') ||
+        url.startsWith('/api/toggle-monitoring') ||
+        url.startsWith('/api/test-notification') ||
+        url.includes('/docker/status')) {
         return next(); // 这些API路径不需要登录
     }
     

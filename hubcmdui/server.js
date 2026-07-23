@@ -40,7 +40,8 @@ const server = http.createServer(app);
 // 配置中间件
 app.use(cors());
 app.use(express.json());
-app.use(express.static('web'));
+// 托管 Vue 构建产物（npm run build 输出到 web/dist），用于生产环境提供新前端
+app.use(express.static(path.join(__dirname, 'web', 'dist')));
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(session({
   secret: config.sessionSecret || 'OhTq3faqSKoxbV%NJV',
@@ -114,18 +115,20 @@ try {
   logger.error('无法加载备用登录路由:', loginError);
 }
 
-// 页面路由
-app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, 'web', 'index.html'));
-});
+// 页面路由：统一返回 Vue 构建产物（web/dist/index.html）。
+// 旧的 jQuery 前端（web/index.html / web/admin.html / web/docs.html）已删除，
+// 未构建时不再回退到任何旧页面，而是返回 503 提示，由运维执行 `npm run build` 生成 web/dist。
+const serveDist = (req, res) => {
+  const distIndex = path.join(__dirname, 'web', 'dist', 'index.html');
+  if (require('fs').existsSync(distIndex)) {
+    return res.sendFile(distIndex);
+  }
+  res.status(503).type('text/plain').send('前端未构建，请先执行 npm run build 生成 web/dist');
+};
 
-app.get('/admin', (req, res) => {
-  res.sendFile(path.join(__dirname, 'web', 'admin.html'));
-});
-
-app.get('/docs', (req, res) => {
-  res.sendFile(path.join(__dirname, 'web', 'docs.html'));
-});
+app.get('/', serveDist);
+app.get('/admin', serveDist);
+app.get('/docs', serveDist);
 
 // 废弃的登录页面路由 - 该路由未使用且导致404错误，现已移除
 // app.get('/login', (req, res) => {
@@ -136,6 +139,18 @@ app.get('/docs', (req, res) => {
 //   
 //   res.sendFile(path.join(__dirname, 'web', 'login.html'));
 // });
+
+// 前端 SPA 路由回退：生产环境对非 API 的 GET 请求返回 Vue 构建产物（web/dist/index.html）
+// 原有 /admin、/docs 等显式路由已在前方注册，不受影响
+app.use((req, res, next) => {
+  if (req.method === 'GET' && !req.path.startsWith('/api/')) {
+    const distIndex = path.join(__dirname, 'web', 'dist', 'index.html');
+    if (require('fs').existsSync(distIndex)) {
+      return res.sendFile(distIndex);
+    }
+  }
+  next();
+});
 
 // 404处理
 app.use((req, res) => {
@@ -198,6 +213,16 @@ async function startServer() {
         logger.info('系统配置初始化完成');
       } catch (initError) {
         logger.warn('系统配置初始化遇到问题:', initError.message);
+      }
+      
+      // 启动资源指标采集器（每 30s 采集 CPU/内存/磁盘使用率并落库，
+      // 使「资源使用趋势」历史跨设备/跨会话统一保存）
+      try {
+        const metricsService = require('./services/metricsService');
+        metricsService.startCollector(30 * 1000);
+        logger.success('资源指标采集器已启动');
+      } catch (metricsError) {
+        logger.warn('资源指标采集器启动失败:', metricsError.message);
       }
       
       // 初始化HTTP代理服务

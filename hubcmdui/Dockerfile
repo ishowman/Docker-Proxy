@@ -1,17 +1,22 @@
-# ---- build stage ----
 FROM node:20-alpine AS build
-WORKDIR /src
+WORKDIR /app
 COPY package.json package-lock.json* ./
 RUN npm install --omit=dev
-COPY . .
+COPY src/package.json src/package-lock.json* ./src/
+RUN cd src && npm install
+COPY src/ ./src/
+RUN cd src && npm run build
 
-# ---- runtime stage ----
+
 FROM node:20-alpine
 WORKDIR /app
+
 ENV NODE_ENV=production
-# 容器内端口（对外通过 docker 端口映射暴露）
+# 容器内监听端口
 ENV PORT=3000
-COPY --from=build /src/node_modules ./node_modules
 COPY . .
+COPY --from=build /app/node_modules ./node_modules
+COPY --from=build /app/web/dist ./web/dist
+
 EXPOSE 3000
 CMD ["node", "server.js"]

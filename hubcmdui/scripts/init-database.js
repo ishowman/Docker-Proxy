@@ -16,12 +16,17 @@ async function initializeDatabase() {
     // 始终运行 createTables 以确保新表被创建 (使用 IF NOT EXISTS 是安全的)
     await database.createTables();
 
+    // 始终确保默认菜单项存在（如 GitHub 默认入口）—— 仅当表为空时种子化
+    await database.createDefaultMenuItems();
+
     // 检查数据库是否已经初始化
     const isInitialized = await database.isInitialized();
     if (isInitialized) {
       logger.info('数据库已经初始化，检查并初始化新配置...');
       // 即使已初始化，也要确保 Registry 配置存在
       await configServiceDB.initializeRegistryConfigs();
+      // 确保锁定站点信息（GitHub 地址）已落地（仅首次写入，不覆盖）
+      await configServiceDB.initLockedSiteInfo();
       return;
     }
 
@@ -36,6 +41,9 @@ async function initializeDatabase() {
 
     // 初始化 Registry 配置
     await configServiceDB.initializeRegistryConfigs();
+
+    // 初始化锁定（不可更改）的站点信息（GitHub 地址，仅首次写入）
+    await configServiceDB.initLockedSiteInfo();
 
     // 标记数据库已初始化
     await database.markAsInitialized();

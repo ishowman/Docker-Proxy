@@ -7,8 +7,17 @@
 const axios = require('axios');
 const logger = require('../logger');
 
-// Go 代理管理接口地址（docker 网络内可达，不对外暴露）
-const ADMIN_BASE = process.env.GO_PROXY_ADMIN_URL || 'http://go-proxy:5001';
+// Go 代理管理接口地址（默认指向 go-proxy:5001，docker 网络内可达）
+// 优先级：
+//   1. GO_PROXY_ADMIN_URL（环境变量；docker-compose 已设置成 http://go-proxy:5001）
+//   2. localhost:5001（本机直接 node server.js 开发时最常见）
+//   3. go-proxy:5001（最终兜底，docker 网络内可用）
+function resolveAdminBase() {
+  if (process.env.GO_PROXY_ADMIN_URL) return process.env.GO_PROXY_ADMIN_URL
+  // 开发模式提示：本机有 5001 就走本机
+  return process.env.NODE_ENV === 'production' ? 'http://go-proxy:5001' : 'http://localhost:5001';
+}
+const ADMIN_BASE = resolveAdminBase();
 // 管理接口鉴权令牌（与 Go 端 GO_PROXY_ADMIN_TOKEN 保持一致）
 const ADMIN_TOKEN = process.env.GO_PROXY_ADMIN_TOKEN || '';
 
@@ -67,14 +76,30 @@ class GoProxyService {
   }
 }
 
-// 把 axios 错误转换成可返回给前端的错误体
+// 把 axios 错误转换成可返回给前端的错误体，并附带当前 admin 地址
 function upstreamError(e) {
+  const adminUrl = ADMIN_BASE;
   if (e.response && e.response.data) {
-    return { status: e.response.status, body: e.response.data };
+    return {
+      status: e.response.status,
+      body: typeof e.response.data === 'string'
+        ? { error: e.response.data, adminUrl }
+        : { ...e.response.data, adminUrl }
+    };
   }
-  return { status: 502, body: { error: e.message } };
+  // 无响应（连接被拒 / DNS 失败 / 超时）— 统一 502
+  const code = e.code || (e.message || '').split('\n')[0];
+  return {
+    status: 502,
+    body: {
+      error: `无法连接 Go 代理管理端口 (${adminUrl}): ${e.message || code || 'unknown'}`,
+      adminUrl,
+      code: code || undefined
+    }
+  };
 }
 
+// 暴露给 status 端点用，让 UI 能展示当前尝试地址
 module.exports = {
   goProxyService: new GoProxyService(),
   upstreamError,

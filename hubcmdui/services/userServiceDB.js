@@ -5,6 +5,36 @@ const bcrypt = require('bcrypt');
 const logger = require('../logger');
 const database = require('../database/database');
 
+/**
+ * 将 ISO 时间格式化为「YYYY-MM-DD HH:mm」（本地时区）
+ */
+function formatDateTime(iso) {
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return '未知';
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+/**
+ * 根据创建时间计算「账户创建时长」并格式化为带单位的文本。
+ * 例：刚刚 / 12 分钟 / 3 小时 / 3 天 / 3 天 5 小时
+ */
+function formatDuration(iso) {
+  const created = new Date(iso);
+  if (isNaN(created.getTime())) return '未知';
+  let diff = Math.floor((Date.now() - created.getTime()) / 1000); // 秒
+  if (diff < 0) diff = 0;
+  if (diff < 60) return '刚刚';
+  const mins = Math.floor(diff / 60);
+  if (mins < 60) return mins + ' 分钟';
+  const hours = Math.floor(mins / 60);
+  const remMins = mins % 60;
+  if (hours < 24) return remMins > 0 ? `${hours} 小时 ${remMins} 分钟` : `${hours} 小时`;
+  const days = Math.floor(hours / 24);
+  const remHours = hours % 24;
+  return remHours > 0 ? `${days} 天 ${remHours} 小时` : `${days} 天`;
+}
+
 class UserServiceDB {
   /**
    * 获取所有用户
@@ -80,17 +110,15 @@ class UserServiceDB {
       const user = await this.getUserByUsername(username);
       
       if (!user) {
-        return { loginCount: '0', lastLogin: '未知', accountAge: '0' };
+        return { loginCount: '0', lastLogin: '未知', accountAge: '未知', createdAt: '未知' };
       }
 
-      // 计算账户年龄
-      let accountAge = '0';
+      // 计算账户创建时长（带单位）与注册时间
+      let accountAge = '未知';
+      let createdAt = '未知';
       if (user.created_at) {
-        const createdDate = new Date(user.created_at);
-        const currentDate = new Date();
-        const diffTime = Math.abs(currentDate - createdDate);
-        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-        accountAge = diffDays.toString();
+        createdAt = formatDateTime(user.created_at);
+        accountAge = formatDuration(user.created_at);
       }
 
       // 格式化最后登录时间
@@ -111,11 +139,12 @@ class UserServiceDB {
         username: user.username,
         loginCount: (user.login_count || 0).toString(),
         lastLogin,
-        accountAge
+        accountAge,
+        createdAt
       };
     } catch (error) {
       logger.error('获取用户统计信息失败:', error);
-      return { loginCount: '0', lastLogin: '未知', accountAge: '0' };
+      return { loginCount: '0', lastLogin: '未知', accountAge: '未知', createdAt: '未知' };
     }
   }
 

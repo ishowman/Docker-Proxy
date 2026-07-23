@@ -7,6 +7,17 @@ const logger = require('../logger');
 const { requireLogin } = require('../middleware/auth');
 const configServiceDB = require('../services/configServiceDB');
 
+// 过滤掉锁定（_lock_ 前缀）的配置键，避免将加密密文随公开配置下发
+function stripLocked(config) {
+  if (!config || typeof config !== 'object') return config;
+  const out = {};
+  for (const [k, v] of Object.entries(config)) {
+    if (typeof k === 'string' && k.startsWith('_lock_')) continue;
+    out[k] = v;
+  }
+  return out;
+}
+
 // 获取配置
 router.get('/config', async (req, res) => {
     try {
@@ -19,7 +30,7 @@ router.get('/config', async (req, res) => {
         } else {
             // 合并默认配置和数据库配置，数据库配置优先
             const defaultConfig = configServiceDB.getDefaultConfig();
-            const mergedConfig = { ...defaultConfig, ...config };
+            const mergedConfig = stripLocked({ ...defaultConfig, ...config });
             res.json(mergedConfig);
         }
     } catch (error) {
@@ -60,7 +71,7 @@ router.post('/config', async (req, res) => {
 router.get('/', async (req, res) => {
   try {
     const config = await configServiceDB.getConfig();
-    res.json(config);
+    res.json(stripLocked(config));
   } catch (error) {
     logger.error('读取配置失败:', error);
     const defaultConfig = configServiceDB.getDefaultConfig();

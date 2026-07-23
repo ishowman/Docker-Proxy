@@ -1,8 +1,11 @@
 node_modules
+src/node_modules
+# 前端构建产物：镜像内由构建阶段产出，禁止从本地上下文带入（避免覆盖/陈旧）
+web/dist
 data
 .git
 *.log
+npm-debug.log
 Dockerfile
 .dockerignore
-npm-debug.log
 .DS_Store

@@ -33,8 +33,42 @@ async function getDockerConnection() {
   return docker;
 }
 
+// ---------- Docker 状态短缓存 ----------
+// getContainersStatus 每次都要直连 Docker 守护进程（list + 逐个 inspect + 运行中的 stats），
+// 稳定需要 1~3 秒。系统看板每 5 秒轮询一次，这里用 2.5s 的 TTL 内存缓存：
+//   - 自动轮询（间隔 5s）必然错过缓存，始终拿到最新数据；
+//   - 快速来回切换菜单时那次刷新直接命中缓存，秒回，避免“切回看板要等几秒”。
+// 同时用 in-flight promise 合并并发请求，防止缓存失效瞬间的惊群。
+let _statusCache = { data: null, ts: 0 }
+let _statusPromise = null
+const STATUS_TTL = 2500
+
 // 修改其他Docker相关方法，添加更友好的错误处理
-async function getContainersStatus() {
+async function getContainersStatus(opts = {}) {
+  const force = !!(opts && opts.force)
+  const now = Date.now()
+  if (!force && _statusCache.data && (now - _statusCache.ts) < STATUS_TTL) {
+    return _statusCache.data
+  }
+  // 缓存未命中但有进行中的请求：直接复用，避免重复打 Docker
+  if (!force && _statusPromise) {
+    return _statusPromise
+  }
+  _statusPromise = (async () => {
+    const data = await _fetchContainersStatus()
+    _statusCache = { data, ts: Date.now() }
+    _statusPromise = null
+    return data
+  })()
+  try {
+    return await _statusPromise
+  } catch (e) {
+    _statusPromise = null
+    throw e
+  }
+}
+
+async function _fetchContainersStatus() {
   const docker = await initDockerConnection();
   if (!docker) {
     logger.warn('[getContainersStatus] Cannot connect to Docker daemon, returning error indicator.');

@@ -100,6 +100,7 @@ class Database {
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         text TEXT NOT NULL,
         link TEXT NOT NULL,
+        icon TEXT DEFAULT '',
         new_tab BOOLEAN DEFAULT 0,
         sort_order INTEGER DEFAULT 0,
         enabled BOOLEAN DEFAULT 1,
@@ -121,12 +122,39 @@ class Database {
         sort_order INTEGER DEFAULT 0,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      )`,
+
+      // 资源指标历史表 - 用于跨设备/跨会话统一保存系统资源使用率（CPU/内存/磁盘百分比）
+      `CREATE TABLE IF NOT EXISTS metric_history (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        ts INTEGER NOT NULL,
+        cpu REAL,
+        memory REAL,
+        disk REAL
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_metric_history_ts ON metric_history(ts)`,
+
+      // Registry 凭证表 - 存储各 Registry 平台的访问凭证（username / password 或 PAT）
+      // password 以 AES 加密存储，避免明文落库；仅供 token 获取流程内部解密使用。
+      `CREATE TABLE IF NOT EXISTS registry_credentials (
+        registry_id TEXT PRIMARY KEY,
+        username TEXT NOT NULL DEFAULT '',
+        password TEXT NOT NULL DEFAULT '',
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
       )`
     ];
 
     for (const sql of tables) {
       await this.run(sql);
     }
+
+    // 兼容老库：表结构已就绪后，补齐新增列与历史数据回填
+    await this.ensureMenuIconColumn();
+    // 兼容老库：确保内置「GitHub / 介绍」默认菜单项存在（仅当对应 text 不存在时插入）
+    // 必须在 createTables 末尾执行，避免后续 createDefaultMenuItems 因"介绍"已存在而跳过，
+    // 导致 GitHub 默认项在全新环境中缺失。
+    await this.ensureDefaultMenuItems();
 
     logger.info('数据表创建完成');
   }
@@ -215,24 +243,39 @@ class Database {
             title: '欢迎使用 Docker 镜像代理加速系统',
             content: `## 系统介绍
 
-这是一个基于官方 Registry 的 Docker 镜像代理加速系统，可以帮助您加速 Docker 镜像的下载和部署。
+Docker Proxy 是一套**自建 Docker 镜像代理加速与管理服务**，支持 Docker Hub、GHCR、Quay、K8s、MCR、Elastic、NVCR 等主流上游镜像仓库的一键部署，并通过 Web 管理后台（HubCMD-UI）集中管理代理配置，帮助您加速 Docker 镜像的下载与部署。
 
-## 主要功能
+## 核心特性
 
-- 🚀 **镜像加速**: 提供多个 Docker Registr 平台镜像仓库的代理加速
-- 🔧 **一键安装**: 支持在不同Linux发行版下一键安装部署
-- 📊 **监控统计**: 实时监控Docker容器服务状态，支持TG、邮箱告警
-- 📖 **镜像搜索**: 提供Hubcmd-UI 镜像搜索管理系统，支持多Registry平台的镜像搜索
+- 🚀 **零磁盘缓存 · 流式转发**：单进程按 Host 自动路由到各大公共仓库，服务端完成 Token 鉴权并流式转发，不落盘、不占用本地存储
+- 🐳 **多 Registry 支持**：内置 Docker Hub、GHCR、Quay、K8s、MCR、Elastic、NVCR 等代理，一键启停
+- 🔧 **一键部署**：自动检查并安装 Docker / Compose 依赖，支持镜像版直拉或源码构建两种方式
+- 🔐 **账号认证**：可配置上游账号密码，由代理服务端换取 Bearer Token，拉取 Docker Hub 私有镜像并缓解官方限流
+- 🖥️ **HubCMD-UI 管理面板**：网页端直接增删改代理、设置服务器参数并热重载；含镜像搜索、文档教程、容器管理、监控告警
+- 🌐 **可选反代**：自动部署 Nginx 或 Caddy 反代并渲染配置（HTTPS、Host 改写）
+- 📦 **跨平台 & 运维**：支持 linux/amd64、linux/arm64；提供服务启动 / 停止 / 重启 / 日志 / 更新 / 卸载全生命周期管理
+
+## 支持的上游镜像仓库
+
+| Registry | 说明 |
+| --- | --- |
+| Docker Hub | Docker 官方镜像仓库 |
+| GHCR | GitHub Container Registry |
+| Quay | Red Hat Quay 公共仓库 |
+| K8s | Kubernetes 相关镜像 |
+| MCR | Microsoft Container Registry |
+| Elastic | Elastic 官方镜像 |
+| NVCR | NVIDIA Container Registry |
 
 ## 快速开始
 
-1. 访问管理面板进行基础配置
-2. 配置 Docker 客户端使用代理地址
+1. 访问管理面板（默认 http://服务器IP:30080/admin）完成基础配置
+2. 配置 Docker 客户端使用本代理地址作为镜像加速源
 3. 开始享受加速的镜像下载体验
 
 ## 更多信息
 
-如需更多帮助，请查看项目文档或访问 GitHub 仓库。`,
+更多部署与配置说明，请查看项目文档或访问 GitHub 仓库：https://github.com/dqzboy/Docker-Proxy`,
             published: 1
           },
           {
@@ -374,28 +417,83 @@ docker info
 
   /**
    * 创建默认菜单项
+   * 注：顶部"首页"由 Landing.vue 模板硬编码（保持现状），此处只种子化可被管理员编辑的入口。
+   * 仅当表为空时插入，保留已有数据。
+   * 升级库由 createTables 末尾的 ensureDefaultMenuItems 负责幂等补全默认项，
+   * 此处不重复插入，避免与 ensureDefaultMenuItems 顺序冲突。
    */
   async createDefaultMenuItems() {
     try {
       const menuCount = await this.get('SELECT COUNT(*) as count FROM menu_items');
-      
+
       if (menuCount.count === 0) {
         const defaultMenuItems = [
-          { text: '控制台', link: '/admin', new_tab: 0, sort_order: 1 },
-          { text: '镜像搜索', link: '/', new_tab: 0, sort_order: 2 },
-          { text: '文档', link: '/docs', new_tab: 0, sort_order: 3 },
-          { text: 'GitHub', link: 'https://github.com/dqzboy/hubcmdui', new_tab: 1, sort_order: 4 }
+          // 顶部 GitHub 入口：用户可在后台「菜单管理」自由编辑文字、链接、是否新标签页打开
+          { text: 'GitHub', link: 'https://github.com/dqzboy/Docker-Proxy', icon: 'github', new_tab: 1, sort_order: 1 },
+          // 顶部「介绍」入口：指向项目介绍站点，同样可在后台「菜单管理」自由编辑
+          { text: '介绍', link: 'https://docker-proxy-desc.vercel.app/', icon: 'book-open', new_tab: 1, sort_order: 2 }
         ];
 
         for (const item of defaultMenuItems) {
           await this.run(
-            'INSERT INTO menu_items (text, link, new_tab, sort_order, enabled, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
-            [item.text, item.link, item.new_tab, item.sort_order, 1, new Date().toISOString(), new Date().toISOString()]
+            'INSERT INTO menu_items (text, link, icon, new_tab, sort_order, enabled, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+            [item.text, item.link, item.icon || '', item.new_tab, item.sort_order, 1, new Date().toISOString(), new Date().toISOString()]
           );
         }
+        logger.info('默认菜单项（GitHub / 介绍）已创建');
       }
     } catch (error) {
       logger.error('创建默认菜单项失败:', error);
+    }
+  }
+
+  /**
+   * 幂等确保「GitHub / 介绍」两个内置默认菜单项存在。
+   * 用于已存在数据的老库 / 全新环境：createDefaultMenuItems 仅在空库时全量种子化，
+   * 为避免覆盖用户自定义菜单，这里按 text 逐项判断（不存在才插入），
+   * 解决"全新环境因 createTables 末尾先补介绍，导致后续 createDefaultMenuItems 跳过，
+   * GitHub 默认项始终缺失"的问题。
+   */
+  async ensureDefaultMenuItems() {
+    const builtIn = [
+      { text: 'GitHub', link: 'https://github.com/dqzboy/Docker-Proxy', icon: 'github', new_tab: 1, sort_order: 1 },
+      { text: '介绍', link: 'https://docker-proxy-desc.vercel.app/', icon: 'book-open', new_tab: 1, sort_order: 2 }
+    ];
+    try {
+      for (const item of builtIn) {
+        const row = await this.get('SELECT COUNT(*) as count FROM menu_items WHERE text = ?', [item.text]);
+        if (row.count === 0) {
+          await this.run(
+            'INSERT INTO menu_items (text, link, icon, new_tab, sort_order, enabled, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+            [item.text, item.link, item.icon || '', item.new_tab, item.sort_order, 1, new Date().toISOString(), new Date().toISOString()]
+          );
+          logger.info(`已补充默认菜单项（${item.text}）`);
+        }
+      }
+    } catch (error) {
+      logger.error('补充默认菜单项失败:', error);
+    }
+  }
+
+  /**
+   * 兼容老库：检测 menu_items 是否已存在 icon 列，若不存在则 ALTER TABLE 补列。
+   * 同时回填已知菜单项的 icon（如默认 GitHub 入口 → 'github'）。
+   * createTables 走 IF NOT EXISTS，老库结构不会自动加列，需显式迁移。
+   */
+  async ensureMenuIconColumn() {
+    try {
+      const cols = await this.all("PRAGMA table_info(menu_items)");
+      const hasIcon = cols.some(c => c.name === 'icon');
+      if (!hasIcon) {
+        await this.run("ALTER TABLE menu_items ADD COLUMN icon TEXT DEFAULT ''");
+        logger.info('已为 menu_items 表新增 icon 列（兼容老库）');
+      }
+      // 回填：默认 GitHub 入口的 icon 字段（基于链接识别，幂等）
+      await this.run(
+        "UPDATE menu_items SET icon = 'github' WHERE (icon IS NULL OR icon = '') AND (LOWER(text) = 'github' OR LOWER(link) LIKE '%github.com%')"
+      );
+    } catch (error) {
+      logger.error('迁移 menu_items.icon 失败:', error);
     }
   }
 }

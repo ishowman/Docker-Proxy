@@ -6,13 +6,35 @@ const axios = require('axios');
 const logger = require('../logger');
 
 // HTTP 请求配置
+// 显式 proxy:false 绕过系统 HTTP_PROXY/HTTPS_PROXY，避免被本地开发代理拦截后
+// 以明文 HTTP 打到 HTTPS 端口（Docker Hub 会返回 400 "plain HTTP request was sent to HTTPS port"）
 const httpOptions = {
   timeout: 15000,
+  proxy: false,
   headers: {
     'User-Agent': 'RegistrySearchClient/1.0',
     'Accept': 'application/json'
   }
 };
+
+/**
+ * 将官方镜像（isOfficial === true）稳定地排到结果列表最前面，组内保持原有相对顺序。
+ * 满足「官方镜像优先展示」的需求。
+ * @param {Array} results
+ * @returns {Array}
+ */
+function sortByOfficial(results) {
+  if (!Array.isArray(results) || !results.length) return results;
+  return results
+    .map((item, idx) => ({ item, idx }))
+    .sort((a, b) => {
+      const ao = a.item.isOfficial ? 1 : 0;
+      const bo = b.item.isOfficial ? 1 : 0;
+      if (bo !== ao) return bo - ao; // 官方(权重 1)排前面
+      return a.idx - b.idx;          // 同组保持原顺序（稳定排序，不依赖引擎实现）
+    })
+    .map(x => x.item);
+}
 
 // Registry 平台配置
 const REGISTRY_CONFIGS = {
@@ -88,6 +110,8 @@ const REGISTRY_CONFIGS = {
     name: 'NVIDIA Container Registry',
     icon: 'fas fa-microchip',
     color: '#76B900',
+    catalogUrl: 'https://nvcr.io/v2/_catalog',
+    tagsUrl: 'https://nvcr.io/v2/{namespace}/{repo}/tags/list',
     prefix: 'nvcr.io',
     description: 'NVIDIA GPU 容器镜像仓库'
   }
@@ -247,17 +271,20 @@ async function searchDockerHub(term, page = 1, pageSize = 25) {
       registryIcon: REGISTRY_CONFIGS['docker-hub'].icon,
       registryColor: REGISTRY_CONFIGS['docker-hub'].color,
       count: data.count || 0,
-      results: (data.results || []).map(item => ({
-        name: item.name || item.repo_name,
-        namespace: item.namespace || (item.is_official ? 'library' : item.name?.split('/')[0]),
-        description: item.description || item.short_description || '',
-        stars: item.star_count || 0,
-        pulls: item.pull_count || 0,
-        isOfficial: item.is_official || false,
-        isAutomated: item.is_automated || false,
-        fullName: item.is_official ? item.name : (item.repo_name || item.name),
-        registry: 'docker-hub',
-        pullCommand: item.is_official ? item.name : (item.repo_name || item.name)
+      results: sortByOfficial((data.results || []).map(item => {
+        const repoName = item.repo_name || item.name;
+        return {
+          name: item.name || item.repo_name,
+          namespace: item.namespace || (item.is_official ? 'library' : (repoName?.includes('/') ? repoName.split('/')[0] : '')),
+          description: item.description || item.short_description || '',
+          stars: item.star_count || 0,
+          pulls: item.pull_count || 0,
+          isOfficial: item.is_official || false,
+          isAutomated: item.is_automated || false,
+          fullName: repoName,
+          registry: 'docker-hub',
+          pullCommand: repoName
+        };
       }))
     };
   } catch (error) {
@@ -289,7 +316,7 @@ async function searchQuay(term, page = 1, pageSize = 25) {
       registryIcon: REGISTRY_CONFIGS['quay'].icon,
       registryColor: REGISTRY_CONFIGS['quay'].color,
       count: results.length,
-      results: results.map(item => ({
+      results: sortByOfficial(results.map(item => ({
         name: item.name,
         namespace: item.namespace?.name || item.namespace,
         description: item.description || '',
@@ -300,7 +327,7 @@ async function searchQuay(term, page = 1, pageSize = 25) {
         fullName: `${item.namespace?.name || item.namespace}/${item.name}`,
         registry: 'quay',
         pullCommand: `quay.io/${item.namespace?.name || item.namespace}/${item.name}`
-      }))
+      })))
     };
   } catch (error) {
     logger.error(`搜索 Quay.io 失败: ${error.message}`);
@@ -313,8 +340,8 @@ async function searchQuay(term, page = 1, pageSize = 25) {
  * 搜索 GitHub Container Registry (使用 GitHub API)
  */
 async function searchGHCR(term, page = 1, pageSize = 25) {
-  // 首先尝试使用静态列表搜索
-  const staticResults = searchStaticList('ghcr', term);
+  // 首先尝试使用静态列表搜索（按 page/pageSize 切片，避免与 API 结果合并后超过 pageSize）
+  const staticResults = searchStaticList('ghcr', term, page, pageSize);
   
   try {
     // 然后尝试使用 GitHub API 搜索仓库
@@ -343,15 +370,16 @@ async function searchGHCR(term, page = 1, pageSize = 25) {
       url: item.html_url
     }));
     
-    // 合并静态列表和 API 结果，去重
+    // 合并静态列表和 API 结果，去重；总条数封顶 pageSize（聚合模式下这是每个 Registry 的配额）
     const allResults = [...staticResults.results];
     const existingNames = new Set(allResults.map(r => r.fullName.toLowerCase()));
     
-    apiResults.forEach(item => {
+    for (const item of apiResults) {
+      if (allResults.length >= pageSize) break;
       if (!existingNames.has(item.fullName.toLowerCase())) {
         allResults.push(item);
       }
-    });
+    }
     
     return {
       registry: 'ghcr',
@@ -359,7 +387,7 @@ async function searchGHCR(term, page = 1, pageSize = 25) {
       registryIcon: REGISTRY_CONFIGS['ghcr'].icon,
       registryColor: REGISTRY_CONFIGS['ghcr'].color,
       count: allResults.length,
-      results: allResults
+      results: sortByOfficial(allResults)
     };
   } catch (error) {
     logger.warn(`GitHub API 搜索失败，使用静态列表: ${error.message}`);
@@ -368,26 +396,29 @@ async function searchGHCR(term, page = 1, pageSize = 25) {
 }
 
 /**
- * 在静态列表中搜索
+ * 在静态列表中搜索（按 page/pageSize 切片）
  */
-function searchStaticList(registryId, term) {
+function searchStaticList(registryId, term, page = 1, pageSize = 25) {
   const config = REGISTRY_CONFIGS[registryId];
   const staticList = STATIC_IMAGE_LISTS[registryId] || [];
   const lowerTerm = term.toLowerCase();
   
-  const matchedResults = staticList.filter(item => {
+  const matched = staticList.filter(item => {
     const nameMatch = item.name.toLowerCase().includes(lowerTerm);
     const descMatch = item.description && item.description.toLowerCase().includes(lowerTerm);
     return nameMatch || descMatch;
   });
+  
+  const start = (page - 1) * pageSize;
+  const slice = matched.slice(start, start + pageSize);
   
   return {
     registry: registryId,
     registryName: config.name,
     registryIcon: config.icon,
     registryColor: config.color,
-    count: matchedResults.length,
-    results: matchedResults.map(item => ({
+    count: matched.length,
+    results: sortByOfficial(slice.map(item => ({
       name: item.name.includes('/') ? item.name.split('/').pop() : item.name,
       namespace: item.namespace || (item.name.includes('/') ? item.name.split('/')[0] : ''),
       description: item.description || '',
@@ -398,7 +429,7 @@ function searchStaticList(registryId, term) {
       fullName: item.name,
       registry: registryId,
       pullCommand: config.prefix ? `${config.prefix}/${item.name}` : item.name
-    }))
+    })))
   };
 }
 
@@ -467,12 +498,29 @@ async function searchRegistry(registryId, term, page = 1, pageSize = 25) {
 
 /**
  * 搜索所有支持的 Registry
+ * @param {string} term 关键词
+ * @param {number} page 页码
+ * @param {number} pageSize 每页总数量（聚合后上限）
+ * @param {string[]} [enabledIds] 仅搜索这些已启用的 Registry（不传则搜索全部）
+ * @returns 聚合结果：每个 Registry 拉 perRegistryLimit 条，合计接近 pageSize；
+ *          前端 totalPages 仍按 max(count) / pageSize 算 → 与单 Registry 翻页体验一致。
  */
-async function searchAllRegistries(term, page = 1, pageSize = 10) {
-  const registries = ['docker-hub', 'quay', 'ghcr', 'k8s', 'gcr', 'mcr', 'elastic', 'nvcr'];
+async function searchAllRegistries(term, page = 1, pageSize = 20, enabledIds = null) {
+  let registries = ['docker-hub', 'quay', 'ghcr', 'k8s', 'gcr', 'mcr', 'elastic', 'nvcr'];
+  if (Array.isArray(enabledIds) && enabledIds.length) {
+    const set = new Set(enabledIds);
+    registries = registries.filter(id => set.has(id));
+  }
+  if (!registries.length) {
+    return { term, page, pageSize, registries: [] };
+  }
+  
+  // 将 pageSize 在多个 Registry 间分配：每个 Registry 至少 1 条，
+  // 不足则向上取整（最后一个 Registry 取剩余，避免溢出太多）
+  const perRegistryLimit = Math.max(1, Math.ceil(pageSize / registries.length));
   
   const searchPromises = registries.map(registryId => 
-    searchRegistry(registryId, term, page, pageSize)
+    searchRegistry(registryId, term, page, perRegistryLimit)
       .catch(error => {
         logger.warn(`搜索 ${registryId} 失败: ${error.message}`);
         return {
@@ -491,6 +539,7 @@ async function searchAllRegistries(term, page = 1, pageSize = 10) {
     term,
     page,
     pageSize,
+    perRegistryLimit,
     registries: results
   };
 }
@@ -599,19 +648,13 @@ async function getOCITags(registryId, imageName) {
   } else {
     url = config.tagsUrl.replace('{repo}', imageName);
   }
-  
+
   try {
-    const response = await axios.get(url, {
-      ...httpOptions,
-      headers: {
-        ...httpOptions.headers,
-        'Accept': 'application/json'
-      }
-    });
-    
+    const response = await fetchWithRegistryAuth(url, registryId, imageName);
+
     const data = response.data;
     const tags = data.tags || [];
-    
+
     return {
       registry: registryId,
       imageName,
@@ -627,6 +670,87 @@ async function getOCITags(registryId, imageName) {
   } catch (error) {
     logger.error(`获取 ${registryId} 标签失败: ${error.message}`);
     throw error;
+  }
+}
+
+/**
+ * 解析 OCI Registry 返回的 401 WWW-Authenticate Bearer 挑战头。
+ * 形如：Bearer realm="https://ghcr.io/token",service="ghcr.io",scope="repository:foo/bar:pull"
+ * nvcr 的 realm 不携带 service 参数，故 service 可能为空。
+ */
+function parseBearerChallenge(header) {
+  const result = { realm: '', service: '', scope: '' };
+  const realm = header.match(/realm="([^"]+)"/);
+  const service = header.match(/service="([^"]+)"/);
+  const scope = header.match(/scope="([^"]+)"/);
+  if (realm) result.realm = realm[1];
+  if (service) result.service = service[1];
+  if (scope) result.scope = scope[1];
+  return result;
+}
+
+/**
+ * 向 OCI Registry V2 接口发起 GET，自动处理 Bearer Token 挑战。
+ * 多数公共 Registry（mcr / k8s / gcr / elastic）对公开仓库允许匿名拉取，
+ * 不会返回 401；ghcr / nvcr 等会返回 401 + WWW-Authenticate 挑战，
+ * 此时按 Docker Registry 标准流程：向 realm 申请匿名 token 后重试。
+ */
+async function fetchWithRegistryAuth(url, registryId, imageName) {
+  const opts = {
+    ...httpOptions,
+    headers: { ...httpOptions.headers, Accept: 'application/json' }
+  };
+  try {
+    return await axios.get(url, opts);
+  } catch (err) {
+    if (err.response && err.response.status === 401) {
+      const authHeader = err.response.headers['www-authenticate'] || '';
+      const { realm, service, scope } = parseBearerChallenge(authHeader);
+      if (realm) {
+        try {
+          const tokenUrl = new URL(realm);
+          if (scope) tokenUrl.searchParams.set('scope', scope);
+          if (service) tokenUrl.searchParams.set('service', service);
+          // 若该 Registry 配置了访问凭证，向 token 端点发起请求时附带 Basic 鉴权，
+          // 使 GitHub 等「要求登录」的仓库（如 bitnami 组织）能换取带 read:packages 权限的 token。
+          const tokenOpts = { ...opts };
+          const cred = await getCredentialForAuth(registryId);
+          if (cred) {
+            tokenOpts.headers.Authorization =
+              'Basic ' + Buffer.from(`${cred.username}:${cred.password}`).toString('base64');
+          }
+          const tokenResp = await axios.get(tokenUrl.toString(), tokenOpts);
+          const token = tokenResp.data && (tokenResp.data.token || tokenResp.data.access_token);
+          if (token) {
+            return await axios.get(url, {
+              ...opts,
+              headers: { ...opts.headers, Authorization: `Bearer ${token}` }
+            });
+          }
+        } catch (tokenErr) {
+          // token 端点返回 403：该仓库要求登录认证（如 GitHub 上 bitnami 等组织的镜像）
+          // 匿名 pull token 被拒绝，需带 read:packages 权限的凭证才能拉取。
+          if (tokenErr.response && tokenErr.response.status === 403) {
+            throw new Error(`仓库「${imageName}」需要登录 ${registryId} 才能查看标签（该平台对该仓库要求认证，请为其配置访问凭证）`);
+          }
+          logger.error(`获取 ${realm} 匿名 token 失败: ${tokenErr.message}`);
+        }
+      }
+    }
+    throw err;
+  }
+}
+
+/**
+ * 懒加载该 Registry 的明文凭证（供 token 端点 Basic 鉴权使用）。
+ * 延迟 require 以避免模块加载期潜在的循环依赖；无凭证时返回 null。
+ */
+async function getCredentialForAuth(registryId) {
+  try {
+    const credService = require('./registryCredentialService');
+    return await credService.getPlainCredential(registryId);
+  } catch (e) {
+    return null;
   }
 }
 

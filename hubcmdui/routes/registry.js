@@ -6,6 +6,7 @@ const express = require('express');
 const router = express.Router();
 const logger = require('../logger');
 const registrySearchService = require('../services/registrySearchService');
+const configServiceDB = require('../services/configServiceDB');
 
 /**
  * 获取支持的 Registry 列表
@@ -92,11 +93,23 @@ router.get('/search-all', async (req, res) => {
         }
         
         logger.info(`聚合搜索所有 Registry: 关键字="${term}", 页码=${page}`);
+
+        // 仅聚合搜索后台「Registry 平台配置」中已启用的平台
+        let enabledIds = null;
+        try {
+            const enabledConfigs = await configServiceDB.getEnabledRegistryConfigs();
+            if (Array.isArray(enabledConfigs) && enabledConfigs.length) {
+                enabledIds = enabledConfigs.map(c => c.registryId || c.registry_id);
+            }
+        } catch (e) {
+            logger.warn('读取启用 Registry 配置失败，回退为搜索全部:', e.message);
+        }
         
         const result = await registrySearchService.searchAllRegistries(
             term, 
             parseInt(page), 
-            parseInt(limit)
+            parseInt(limit),
+            enabledIds
         );
         
         res.json({
@@ -149,10 +162,12 @@ router.get('/tags/:registryId', async (req, res) => {
         });
     } catch (err) {
         logger.error(`获取镜像标签失败 (${req.params.registryId}):`, err.message);
-        res.status(500).json({ 
+        // 透传更具体的业务错误（如「需要登录认证」），让前端给出明确提示而非笼统报错
+        const isAuthErr = err.message && err.message.includes('需要登录');
+        res.status(isAuthErr ? 403 : 500).json({
             success: false,
-            error: '获取镜像标签失败', 
-            details: err.message 
+            error: err.message || '获取镜像标签失败',
+            details: err.message
         });
     }
 });

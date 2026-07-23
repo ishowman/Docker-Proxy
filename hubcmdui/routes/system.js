@@ -12,6 +12,7 @@ const { requireLogin } = require('../middleware/auth');
 const configServiceDB = require('../services/configServiceDB');
 const { execCommand, getSystemInfo } = require('../server-utils');
 const dockerService = require('../services/dockerService');
+const systemService = require('../services/systemService');
 const path = require('path');
 const fs = require('fs').promises;
 
@@ -287,202 +288,22 @@ router.get('/system-status', requireLogin, async (req, res) => {
     }
 });
 
-// 添加新的API端点，提供完整系统资源信息
+// 系统资源（CPU / 内存 / 磁盘 / 网络 / 温度），基于 systeminformation，数值准确
 router.get('/system-resources', requireLogin, async (req, res) => {
-    logger.info('Received request for /api/system-resources');
-    let cpuInfoData = null, memoryData = null, diskInfoData = null, systemData = null;
-    
-    // --- 获取 CPU 信息 (独立 try...catch) ---
-    try {
-         const cpuInfo = os.cpus();
-         const [load1, load5, load15] = os.loadavg();
-         const cpuCount = cpuInfo.length || 1;
-         const cpuUsage = (load1 / cpuCount * 100).toFixed(1);
-         cpuInfoData = {
-             cores: cpuCount,
-             model: cpuInfo[0]?.model || '未知',
-             speed: `${cpuInfo[0]?.speed || '未知'} MHz`,
-             loadAvg: {
-                 '1min': load1.toFixed(2),
-                 '5min': load5.toFixed(2),
-                 '15min': load15.toFixed(2)
-             },
-             usage: parseFloat(cpuUsage)
-         };
-         logger.info('Successfully retrieved CPU info.');
-    } catch (cpuError) {
-         logger.error('Error getting CPU info:', cpuError.message);
-         cpuInfoData = { error: '获取 CPU 信息失败', message: cpuError.message }; // 返回错误信息
-    }
-    
-    // --- 获取内存信息 (独立 try...catch) ---
-    try {
-         const totalMem = os.totalmem();
-         const freeMem = os.freemem();
-         const usedMem = totalMem - freeMem;
-         const memoryUsagePercent = totalMem > 0 ? Math.round(usedMem / totalMem * 100) : 0;
-         memoryData = {
-             total: formatBytes(totalMem), // 可能出错
-             free: formatBytes(freeMem), // 可能出错
-             used: formatBytes(usedMem), // 可能出错
-             usedPercentage: memoryUsagePercent
-         };
-          logger.info('Successfully retrieved Memory info.');
-    } catch (memError) {
-         logger.error('Error getting Memory info:', memError.message);
-         memoryData = { error: '获取内存信息失败', message: memError.message }; // 返回错误信息
-    }
-    
-    // --- 获取磁盘信息 (独立 try...catch) ---
-    try {
-        let diskResult = { total: '未知', free: '未知', used: '未知', usedPercentage: '未知' }; 
-        logger.info(`Getting disk info for platform: ${os.platform()}`);
-        if (os.platform() === 'darwin' || os.platform() === 'linux') {
-            try {
-                 // 使用 -k 获取 KB 单位，方便计算
-                 const { stdout } = await execPromise('df -k / | tail -n 1', { timeout: 5000 }); 
-                 logger.info(`'df -k' command output: ${stdout}`);
-                 const parts = stdout.trim().split(/\s+/);
-                 // 索引通常是 1=Total, 2=Used, 3=Available, 4=Use%
-                 if (parts.length >= 4) { 
-                     const total = parseInt(parts[1], 10) * 1024; // KB to Bytes
-                     const used = parseInt(parts[2], 10) * 1024;  // KB to Bytes
-                     const free = parseInt(parts[3], 10) * 1024;  // KB to Bytes
-                     // 优先使用命令输出的百分比，更准确
-                     let usedPercentage = parseInt(parts[4].replace('%', ''), 10);
-                     
-                     // 如果解析失败或百分比无效，则尝试计算
-                     if (isNaN(usedPercentage) && !isNaN(total) && !isNaN(used) && total > 0) {
-                         usedPercentage = Math.round((used / total) * 100);
-                     }
-
-                     if (!isNaN(total) && !isNaN(used) && !isNaN(free) && !isNaN(usedPercentage)) {
-                          diskResult = {
-                              total: formatBytes(total), // 可能出错
-                              free: formatBytes(free), // 可能出错
-                              used: formatBytes(used), // 可能出错
-                              usedPercentage: usedPercentage
-                          };
-                          logger.info('Successfully parsed disk info (Linux/Darwin).');
-                     } else {
-                          logger.warn('Failed to parse numbers from df output:', parts);
-                          diskResult = { ...diskResult, error: '解析 df 输出失败' }; // 添加错误标记
-                     }
-                 } else {
-                      logger.warn('Unexpected output format from df:', stdout);
-                      diskResult = { ...diskResult, error: 'df 输出格式不符合预期' }; // 添加错误标记
-                 }
-            } catch (dfError) {
-                logger.error(`Error executing or parsing 'df -k': ${dfError.message}`);
-                if (dfError.killed) logger.error("'df -k' command timed out."); 
-                diskResult = { error: '获取磁盘信息失败 (df)', message: dfError.message }; // 标记错误
-            }
-        } else if (os.platform() === 'win32') {
-            try {
-                 // 获取 C 盘信息 (可以修改为获取所有盘符或特定盘符)
-                 const { stdout } = await execPromise(`wmic logicaldisk where "DeviceID='C:'" get size,freespace /value`, { timeout: 5000 });
-                 logger.info(`'wmic' command output: ${stdout}`);
-                 const lines = stdout.trim().split(/\r?\n/);
-                 let free = NaN, total = NaN;
-                 lines.forEach(line => {
-                     if (line.startsWith('FreeSpace=')) {
-                         free = parseInt(line.split('=')[1], 10);
-                     } else if (line.startsWith('Size=')) {
-                         total = parseInt(line.split('=')[1], 10);
-                     }
-                 });
-
-                 if (!isNaN(total) && !isNaN(free) && total > 0) {
-                     const used = total - free;
-                     const usedPercentage = Math.round((used / total) * 100);
-                     diskResult = {
-                         total: formatBytes(total), // 可能出错
-                         free: formatBytes(free), // 可能出错
-                         used: formatBytes(used), // 可能出错
-                         usedPercentage: usedPercentage
-                     };
-                     logger.info('Successfully parsed disk info (Windows - C:).');
-                 } else {
-                      logger.warn('Failed to parse numbers from wmic output:', stdout);
-                      diskResult = { ...diskResult, error: '解析 wmic 输出失败' }; // 添加错误标记
-                 }
-            } catch (wmicError) {
-                 logger.error(`Error executing or parsing 'wmic': ${wmicError.message}`);
-                 if (wmicError.killed) logger.error("'wmic' command timed out.");
-                 diskResult = { error: '获取磁盘信息失败 (wmic)', message: wmicError.message }; // 标记错误
-            }
-        }
-        diskInfoData = diskResult; 
-    } catch (diskErrorOuter) {
-        logger.error('Unexpected error during disk info gathering:', diskErrorOuter.message);
-        diskInfoData = { error: '获取磁盘信息时发生意外错误', message: diskErrorOuter.message }; // 返回错误信息
-    }
-    
-    // --- 获取其他系统信息 (独立 try...catch) ---
-     try {
-          systemData = {
-              platform: os.platform(),
-              release: os.release(),
-              hostname: os.hostname(),
-              uptime: formatUptime(os.uptime()) // 可能出错
-          };
-          logger.info('Successfully retrieved general system info.');
-     } catch (sysInfoError) {
-          logger.error('Error getting general system info:', sysInfoError.message);
-          systemData = { error: '获取常规系统信息失败', message: sysInfoError.message }; // 返回错误信息
-     }
-
-    // --- 包装 Helper 函数调用以捕获潜在错误 ---
-    const safeFormatBytes = (bytes) => {
-        try {
-            return formatBytes(bytes);
-        } catch (e) {
-            logger.error(`formatBytes failed for value ${bytes}:`, e.message);
-            return '格式化错误';
-        }
-    };
-    const safeFormatUptime = (seconds) => {
-        try {
-            return formatUptime(seconds);
-        } catch (e) {
-            logger.error(`formatUptime failed for value ${seconds}:`, e.message);
-            return '格式化错误';
-        }
-    };
-
-    // --- 构建最终响应数据，使用安全的 Helper 函数 --- 
-    const finalCpuData = cpuInfoData?.error ? cpuInfoData : {
-        ...cpuInfoData
-        // CPU 不需要格式化
-    };
-    const finalMemoryData = memoryData?.error ? memoryData : {
-        ...memoryData,
-        total: safeFormatBytes(os.totalmem()),
-        free: safeFormatBytes(os.freemem()),
-        used: safeFormatBytes(os.totalmem() - os.freemem())
-    };
-    const finalDiskData = diskInfoData?.error ? diskInfoData : {
-        ...diskInfoData,
-        // 如果 diskInfoData 内部有 total/free/used (字节数)，则格式化
-        // 否则保持 '未知' 或已格式化的字符串
-        total: (diskInfoData?.total && typeof diskInfoData.total === 'number') ? safeFormatBytes(diskInfoData.total) : diskInfoData?.total || '未知',
-        free: (diskInfoData?.free && typeof diskInfoData.free === 'number') ? safeFormatBytes(diskInfoData.free) : diskInfoData?.free || '未知',
-        used: (diskInfoData?.used && typeof diskInfoData.used === 'number') ? safeFormatBytes(diskInfoData.used) : diskInfoData?.used || '未知'
-    };
-    const finalSystemData = systemData?.error ? systemData : {
-        ...systemData,
-        uptime: safeFormatUptime(os.uptime())
-    };
-
+  try {
+    const r = await systemService.getSystemResources();
     const responseData = {
-        cpu: finalCpuData,
-        memory: finalMemoryData,
-        diskSpace: finalDiskData,
-        system: finalSystemData
+      cpu: r.cpu,
+      memory: r.memory,
+      diskSpace: r.disk,
+      network: r.network,
+      system: r.system
     };
-    
-    logger.info('Sending response for /api/system-resources:', JSON.stringify(responseData));
-    res.status(200).json(responseData); 
+    res.status(200).json(responseData);
+  } catch (e) {
+    logger.error('获取系统资源失败 (/api/system-resources):', e);
+    res.status(500).json({ error: '获取系统资源失败', details: e.message });
+  }
 });
 
 // 格式化系统运行时间

@@ -3,6 +3,12 @@
  */
 const logger = require('../logger');
 const database = require('../database/database');
+const { encrypt, decrypt } = require('../lib/cryptoUtil');
+
+// 锁定（不可更改）站点信息的配置键前缀，接口层禁止写入
+const LOCK_PREFIX = '_lock_';
+// 锁定的 GitHub 仓库地址默认值
+const DEFAULT_GITHUB_URL = 'https://github.com/dqzboy/Docker-Proxy';
 
 class ConfigServiceDB {
   /**
@@ -36,6 +42,11 @@ class ConfigServiceDB {
    */
   async saveConfig(key, value, description = null) {
     try {
+      // 锁定前缀的配置键（_lock_*）禁止通过接口写入/覆盖，保证「不可更改」
+      if (typeof key === 'string' && key.startsWith(LOCK_PREFIX)) {
+        logger.warn(`拒绝写入锁定配置项 ${key}（不可更改）`);
+        return;
+      }
       const valueString = JSON.stringify(value);
       const valueType = typeof value;
       
@@ -166,6 +177,44 @@ class ConfigServiceDB {
   }
 
   /**
+   * 初始化锁定（不可更改）的站点信息
+   * 仅在数据库中没有该记录时写入一次，绝不在后续调用中覆盖，保证「不可更改」。
+   * @param {string} [githubUrl] 可选，默认使用项目官方仓库地址
+   */
+  async initLockedSiteInfo(githubUrl = DEFAULT_GITHUB_URL) {
+    try {
+      const existing = await database.get("SELECT id FROM configs WHERE key = ?", ['_lock_github_url']);
+      if (!existing) {
+        // 以 AES 加密后存为 JSON 对象 { d: 'iv:data' }，避免破坏 getConfig 的 JSON.parse
+        const payload = JSON.stringify({ d: encrypt(githubUrl) });
+        await database.run(
+          'INSERT INTO configs (key, value, type, description, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)',
+          ['_lock_github_url', payload, 'locked', '锁定不可更改的 GitHub 仓库地址（AES 加密存储）', new Date().toISOString(), new Date().toISOString()]
+        );
+        logger.info('已落地锁定 GitHub 地址（加密存储）');
+      }
+    } catch (error) {
+      logger.error('初始化锁定站点信息失败:', error);
+    }
+  }
+
+  /**
+   * 读取锁定（不可更改）的 GitHub 仓库地址（解密）
+   * @returns {Promise<string>} 解密后的地址，失败或未配置返回空串
+   */
+  async getLockedGithubUrl() {
+    try {
+      const row = await database.get("SELECT value FROM configs WHERE key = ?", ['_lock_github_url']);
+      if (!row) return '';
+      const parsed = JSON.parse(row.value);
+      return decrypt(parsed && parsed.d);
+    } catch (error) {
+      logger.error('读取锁定 GitHub 地址失败:', error);
+      return '';
+    }
+  }
+
+  /**
    * 获取监控配置
    */
   async getMonitoringConfig() {
@@ -191,18 +240,35 @@ class ConfigServiceDB {
 
   /**
    * 获取菜单项配置
+   * 返回字段：text / link / newTab / icon
+   *   - icon 为后端存储的图标 key（kebab-case），前端用 iconMap 渲染
+   *   - 若老库未迁移导致 icon 缺失，本方法会回退按 link 识别（GitHub 链接 → 'github'）
    */
   async getMenuItems() {
     try {
       const menuItems = await database.all(
-        'SELECT text, link, new_tab, sort_order, enabled FROM menu_items WHERE enabled = 1 ORDER BY sort_order'
+        'SELECT text, link, icon, new_tab, sort_order, enabled FROM menu_items WHERE enabled = 1 ORDER BY sort_order'
       );
-      
-      return menuItems.map(item => ({
-        text: item.text,
-        link: item.link,
-        newTab: Boolean(item.new_tab)
-      }));
+
+      return menuItems.map(item => {
+        const text = item.text || '';
+        const link = item.link || '';
+        const lowerLink = String(link).toLowerCase();
+        const lowerText = String(text).trim().toLowerCase();
+        // icon 字段：优先用存储值，缺失时按链接/文本兜底识别（仅对 GitHub 做强识别，避免误判）
+        let icon = item.icon || '';
+        if (!icon) {
+          if (lowerText === 'github' || lowerLink.includes('github.com')) {
+            icon = 'github';
+          }
+        }
+        return {
+          text,
+          link,
+          icon,
+          newTab: Boolean(item.new_tab)
+        };
+      });
     } catch (error) {
       logger.error('获取菜单项失败:', error);
       return [];
@@ -211,21 +277,54 @@ class ConfigServiceDB {
 
   /**
    * 保存菜单项配置
+   * 接收 items[i] = { text, link, newTab, icon }
+   * 校验：text 必填；link 必填且仅接受 http(s):// 绝对 URL 或 / 开头站内路径；
+   *       拒绝危险协议（javascript: / data: / vbscript: / file:）
    */
   async saveMenuItems(menuItems) {
     try {
-      // 先清空现有菜单项
+      // 链接格式校验：与前端 Menu.vue isValidLink 逻辑一致
+      const isValidLink = (link) => {
+        if (!link || typeof link !== 'string') return false
+        const v = link.trim()
+        if (!v) return false
+        if (/^\s*(javascript|data|vbscript|file):/i.test(v)) return false
+        if (v.startsWith('/') && !v.startsWith('//')) return true
+        if (/^https?:\/\//i.test(v)) return true
+        return false
+      }
+
+      for (let i = 0; i < menuItems.length; i++) {
+        const item = menuItems[i]
+        if (!item.text || !String(item.text).trim()) {
+          throw new Error(`第 ${i + 1} 项菜单文本不能为空`)
+        }
+        if (!isValidLink(item.link)) {
+          throw new Error(`第 ${i + 1} 项链接地址无效：需以 http://、https:// 开头，或以 / 开头的站内路径`)
+        }
+      }
+
+      // 校验通过：先清空现有菜单项
       await database.run('DELETE FROM menu_items');
-      
+
       // 插入新的菜单项
       for (let i = 0; i < menuItems.length; i++) {
         const item = menuItems[i];
         await database.run(
-          'INSERT INTO menu_items (text, link, new_tab, sort_order, enabled, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
-          [item.text, item.link, item.newTab ? 1 : 0, i + 1, 1, new Date().toISOString(), new Date().toISOString()]
+          'INSERT INTO menu_items (text, link, icon, new_tab, sort_order, enabled, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+          [
+            item.text,
+            item.link,
+            (item.icon || '').toString(),
+            item.newTab ? 1 : 0,
+            i + 1,
+            1,
+            new Date().toISOString(),
+            new Date().toISOString()
+          ]
         );
       }
-      
+
       logger.info('菜单项配置保存成功');
     } catch (error) {
       logger.error('保存菜单项失败:', error);
