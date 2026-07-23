@@ -14,6 +14,7 @@ const { execCommand, getSystemInfo } = require('../server-utils');
 const dockerService = require('../services/dockerService');
 const systemService = require('../services/systemService');
 const networkTestService = require('../services/networkTestService');
+const trafficService = require('../services/trafficService');
 const path = require('path');
 const fs = require('fs').promises;
 
@@ -405,5 +406,20 @@ function formatBytes(bytes, decimals = 2) {
     
     return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
 }
+
+// 网络流量监控：当前实时速率 + 历史吞吐曲线 + 窗口内总量
+router.get('/network-traffic', requireLogin, async (req, res) => {
+  try {
+    const hours = Math.min(Math.max(parseInt(req.query.hours) || 24, 1), 24 * 7);
+    const [current, history] = await Promise.all([
+      trafficService.getCurrent(),
+      trafficService.getHistory(hours)
+    ]);
+    res.json({ current, history });
+  } catch (error) {
+    logger.error('获取网络流量失败:', error);
+    res.status(500).json({ error: '获取网络流量失败', message: error.message });
+  }
+});
 
 module.exports = router; // 只导出 router

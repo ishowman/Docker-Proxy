@@ -100,6 +100,39 @@
             <div class="field-hint">两次检测之间的间隔，建议 30 – 120 秒</div>
           </el-form-item>
         </el-form>
+
+        <div class="traffic-divider" />
+
+        <div class="traffic-head"><el-icon><DataLine /></el-icon> 网络流量告警</div>
+        <el-form label-position="top" class="mon-form">
+          <el-form-item>
+            <el-switch v-model="form.enableTrafficAlert" active-text="启用" inactive-text="停用" inline-prompt />
+            <div class="field-hint">开启后，当服务器带宽或客户端拉取流量达到下方阈值时推送通知</div>
+          </el-form-item>
+          <div class="traffic-grid" :class="{ disabled: !form.enableTrafficAlert }">
+            <el-form-item label="下载速率阈值" class="traffic-field">
+              <el-input-number v-model="form.rxRateThreshold" :min="0" :step="10" controls-position="right" />
+              <span class="unit">MB/s</span>
+              <div class="field-hint">0 表示不限制</div>
+            </el-form-item>
+            <el-form-item label="上传速率阈值" class="traffic-field">
+              <el-input-number v-model="form.txRateThreshold" :min="0" :step="10" controls-position="right" />
+              <span class="unit">MB/s</span>
+              <div class="field-hint">0 表示不限制</div>
+            </el-form-item>
+            <el-form-item label="24h 总流量阈值" class="traffic-field">
+              <el-input-number v-model="form.dailyTrafficThreshold" :min="0" :step="50" controls-position="right" />
+              <span class="unit">GB</span>
+              <div class="field-hint">0 表示不限制</div>
+            </el-form-item>
+            <el-form-item label="单客户端日流量阈值" class="traffic-field">
+              <el-input-number v-model="form.singleIpDailyThreshold" :min="0" :step="10" controls-position="right" />
+              <span class="unit">GB</span>
+              <div class="field-hint">0 表示不限制；按客户端 IP 累计</div>
+            </el-form-item>
+          </div>
+        </el-form>
+
         <el-button class="test-btn" :loading="testing" @click="onTest">
           <el-icon><Promotion /></el-icon> 发送测试通知
         </el-button>
@@ -140,11 +173,18 @@
 import { ref, computed, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import {
-  Check, Monitor, Bell, CircleCheck, ChatDotRound, ChatLineRound, Link, Timer, Promotion, Warning, VideoPlay
+  Check, Monitor, Bell, CircleCheck, ChatDotRound, ChatLineRound, Link, Timer, Promotion, Warning, VideoPlay, DataLine
 } from '@element-plus/icons-vue'
 import { getMonitoringConfig, saveMonitoringConfig, toggleMonitoring, testNotification, getStoppedContainersForMonitor, startContainer } from '../services'
 
-const form = ref({ notificationType: 'wechat', webhookUrl: '', telegramToken: '', telegramChatId: '', monitorInterval: 60 })
+const form = ref({
+  notificationType: 'wechat', webhookUrl: '', telegramToken: '', telegramChatId: '', monitorInterval: 60,
+  enableTrafficAlert: false,
+  rxRateThreshold: 100,
+  txRateThreshold: 100,
+  dailyTrafficThreshold: 500,
+  singleIpDailyThreshold: 100
+})
 const enabled = ref(false)
 const saving = ref(false), toggling = ref(false), testing = ref(false)
 const stopped = ref([]), loadingStopped = ref(false)
@@ -279,7 +319,16 @@ onMounted(load)
 }
 .field-hint { font-size: 12px; color: var(--muted); line-height: 1.5; margin-top: 4px; }
 .unit { margin-left: 8px; color: var(--muted); font-size: 13px; }
-.test-btn { width: calc(100% - 28px); margin: 6px 14px 0; }
+.test-btn { width: calc(100% - 28px); margin: 14px 14px 0; }
+
+.traffic-divider { height: 1px; background: var(--border); margin: 6px 14px 14px; }
+.traffic-head { display: flex; align-items: center; gap: 7px; font-size: 14px; font-weight: 600; color: var(--fg); margin: 0 14px 10px; }
+.traffic-head .el-icon { color: var(--accent); }
+.traffic-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 16px; }
+.traffic-grid.disabled { opacity: .55; pointer-events: none; }
+.traffic-field :deep(.el-form-item__content) { flex-wrap: wrap; align-items: center; }
+.traffic-field .unit { margin-left: 8px; color: var(--muted); font-size: 13px; }
+.traffic-field .field-hint { width: 100%; margin-top: 5px; font-size: 12px; color: var(--muted); line-height: 1.5; }
 
 .stopped { margin-top: 0; }
 

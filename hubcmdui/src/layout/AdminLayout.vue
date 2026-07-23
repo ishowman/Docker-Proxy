@@ -95,7 +95,7 @@ import { ElMessage } from 'element-plus'
 import {
   Odometer, Cpu, Connection, Document, Operation,
   Histogram, Monitor, User, SwitchButton,
-  Sunny, Moon, CaretBottom, Setting
+  Sunny, Moon, CaretBottom, Setting, DataLine
 } from '@element-plus/icons-vue'
 import { getConfig, getUserInfo, logout, getSiteInfo } from '../services'
 import { useTheme } from '../composables/useTheme'
@@ -109,6 +109,7 @@ const nav = [
   { name: 'documents', title: '文档管理', icon: Document },
   { name: 'menu', title: '菜单管理', icon: Operation },
   { name: 'network', title: '网络测试', icon: Histogram },
+  { name: 'traffic', title: '流量监控', icon: DataLine },
   { name: 'monitoring', title: '监控配置', icon: Monitor },
   { name: 'user', title: '用户中心', icon: User }
 ]

@@ -57,6 +57,20 @@ func main() {
 	adminMux.HandleFunc("/-/reload", func(w http.ResponseWriter, r *http.Request) {
 		handleAdminReload(w, r, proxy, configPath, adminToken)
 	})
+	adminMux.HandleFunc("/-/stats", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost && r.URL.Query().Get("reset") == "1" {
+			proxy.resetStats()
+			writeJSON(w, http.StatusOK, map[string]interface{}{"success": true, "reset": true})
+			return
+		}
+		if r.Method != http.MethodGet {
+			writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]interface{}{
+			"clients": proxy.snapshotStats(),
+		})
+	})
 
 	adminHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// /-/healthz is a public liveness probe (no token required).

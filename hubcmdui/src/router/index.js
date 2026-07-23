@@ -26,6 +26,7 @@ const routes = [
       { path: 'documents', name: 'documents', component: () => import('../views/Documents.vue') },
       { path: 'menu', name: 'menu', component: () => import('../views/Menu.vue') },
       { path: 'network', name: 'network', component: () => import('../views/NetworkTest.vue') },
+      { path: 'traffic', name: 'traffic', component: () => import('../views/NetworkTraffic.vue') },
       { path: 'monitoring', name: 'monitoring', component: () => import('../views/Monitoring.vue') },
       { path: 'user', name: 'user', component: () => import('../views/UserCenter.vue') }
     ]

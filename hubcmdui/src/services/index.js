@@ -61,6 +61,9 @@ export const getSystemResourceDetails = () =>
 export const getDiskSpace = () => api.get('/disk-space').then(r => r.data)
 export const networkTest = (payload) =>
   api.post('/network-test', payload).then(r => r.data)
+export const getNetworkTraffic = (hours = 24) =>
+  api.get('/network-traffic', { params: { hours } }).then(r => r.data)
+export const getProxyStats = () => api.get('/goProxy/stats').then(r => r.data)
 
 // ============ Docker 容器 ============
 export const getDockerStatus = () => api.get('/docker/status').then(r => r.data)

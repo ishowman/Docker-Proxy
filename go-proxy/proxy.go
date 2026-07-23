@@ -6,9 +6,11 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"net"
 	"net/http"
 	"net/url"
 	"regexp"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -42,6 +44,27 @@ type Proxy struct {
 
 	tokenCache map[string]tokenEntry
 	cacheMux   sync.Mutex
+
+	// Per-client traffic accounting (in-memory; reset on restart or via /-/stats?reset=1).
+	statsMux    sync.Mutex
+	clientStats map[string]*clientStat
+}
+
+// clientStat holds cumulative traffic for a single client IP.
+type clientStat struct {
+	BytesTotal int64            `json:"bytesTotal"`
+	Requests   int64            `json:"requests"`
+	LastSeen   time.Time        `json:"lastSeen"`
+	ByReg      map[string]int64 `json:"byRegistry"`
+}
+
+// statEntry is the JSON shape returned by the /-/stats endpoint.
+type statEntry struct {
+	IP         string            `json:"ip"`
+	BytesTotal int64             `json:"bytesTotal"`
+	Requests   int64             `json:"requests"`
+	LastSeen   time.Time         `json:"lastSeen"`
+	ByRegistry map[string]int64  `json:"byRegistry"`
 }
 
 // buildRoutes computes the Host->registry index and the default registry from cfg.
@@ -73,6 +96,7 @@ func NewProxy(cfg *Config) *Proxy {
 		hostIndex:  make(map[string]*RegistryConfig),
 		clients:    make(map[string]*http.Client),
 		tokenCache: make(map[string]tokenEntry),
+		clientStats: make(map[string]*clientStat),
 	}
 	idx, def := buildRoutes(cfg)
 	p.hostIndex = idx
@@ -151,7 +175,9 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	start := time.Now()
-	p.proxyRequest(w, r, reg)
+	ip := p.clientIP(r)
+	bytes := p.proxyRequest(w, r, reg)
+	p.recordTransfer(ip, reg.Name, bytes)
 	p.maybeLog(r, reg, start)
 }
 
@@ -185,7 +211,69 @@ func (p *Proxy) maybeLog(r *http.Request, reg *RegistryConfig, start time.Time) 
 	log.Printf("%s %s -> %s (%s)", r.Method, r.URL.Path, reg.Name, time.Since(start))
 }
 
-func (p *Proxy) proxyRequest(w http.ResponseWriter, r *http.Request, reg *RegistryConfig) {
+// clientIP extracts the real client address. When the proxy runs behind a
+// reverse proxy (nginx/Caddy) that sets X-Forwarded-For, the first hop in the
+// comma-separated chain is the original client; otherwise we fall back to the
+// socket peer address (port stripped).
+func (p *Proxy) clientIP(r *http.Request) string {
+	if fwd := r.Header.Get("X-Forwarded-For"); fwd != "" {
+		if idx := strings.IndexByte(fwd, ','); idx >= 0 {
+			return strings.TrimSpace(fwd[:idx])
+		}
+		return strings.TrimSpace(fwd)
+	}
+	if host, _, err := net.SplitHostPort(r.RemoteAddr); err == nil {
+		return host
+	}
+	return r.RemoteAddr
+}
+
+// recordTransfer adds bytes served to a client's running tally.
+func (p *Proxy) recordTransfer(ip, reg string, bytes int64) {
+	if ip == "" || bytes <= 0 {
+		return
+	}
+	p.statsMux.Lock()
+	st, ok := p.clientStats[ip]
+	if !ok {
+		st = &clientStat{ByReg: make(map[string]int64)}
+		p.clientStats[ip] = st
+	}
+	st.BytesTotal += bytes
+	st.Requests++
+	st.LastSeen = time.Now()
+	if reg != "" {
+		st.ByReg[reg] += bytes
+	}
+	p.statsMux.Unlock()
+}
+
+// snapshotStats returns per-client tallies sorted by total bytes (descending).
+func (p *Proxy) snapshotStats() []statEntry {
+	p.statsMux.Lock()
+	defer p.statsMux.Unlock()
+	out := make([]statEntry, 0, len(p.clientStats))
+	for ip, st := range p.clientStats {
+		out = append(out, statEntry{
+			IP:         ip,
+			BytesTotal: st.BytesTotal,
+			Requests:   st.Requests,
+			LastSeen:   st.LastSeen,
+			ByRegistry: st.ByReg,
+		})
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].BytesTotal > out[j].BytesTotal })
+	return out
+}
+
+// resetStats clears all per-client tallies.
+func (p *Proxy) resetStats() {
+	p.statsMux.Lock()
+	p.clientStats = make(map[string]*clientStat)
+	p.statsMux.Unlock()
+}
+
+func (p *Proxy) proxyRequest(w http.ResponseWriter, r *http.Request, reg *RegistryConfig) (written int64) {
 	client := p.getClient(reg)
 
 	target, err := url.Parse(reg.Upstream)
@@ -255,6 +343,7 @@ func (p *Proxy) proxyRequest(w http.ResponseWriter, r *http.Request, reg *Regist
 			if _, werr := w.Write(buf[:n]); werr != nil {
 				return
 			}
+			written += int64(n)
 			if flusher != nil {
 				flusher.Flush()
 			}
@@ -266,6 +355,7 @@ func (p *Proxy) proxyRequest(w http.ResponseWriter, r *http.Request, reg *Regist
 			return
 		}
 	}
+	return written
 }
 
 // doUpstream issues a request to the upstream. When token != "" it is sent as a
