@@ -59,8 +59,8 @@ export const getMetricsHistory = (hours = 24) =>
 export const getSystemResourceDetails = () =>
   api.get('/system-resource-details').then(r => r.data)
 export const getDiskSpace = () => api.get('/disk-space').then(r => r.data)
-export const networkTest = (domain, type) =>
-  api.post('/network-test', { domain, type }).then(r => r.data)
+export const networkTest = (payload) =>
+  api.post('/network-test', payload).then(r => r.data)
 
 // ============ Docker 容器 ============
 export const getDockerStatus = () => api.get('/docker/status').then(r => r.data)

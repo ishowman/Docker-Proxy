@@ -8,6 +8,9 @@ const os = require('os');
 const { exec } = require('child_process');
 const util = require('util');
 const execPromise = util.promisify(exec);
+const networkTestService = require('./services/networkTestService');
+const systemService = require('./services/systemService');
+const { generateCaptchaCode, verifyCaptcha } = require('./lib/captcha');
 
 module.exports = function(app) {
   logger.info('加载API兼容层...');
@@ -33,13 +36,11 @@ module.exports = function(app) {
     }
   });
   
-  // 验证码接口
+  // 验证码接口（随机字母/数字，大小写不敏感）
   app.get('/api/captcha', (req, res) => {
     try {
-      const num1 = Math.floor(Math.random() * 10);
-      const num2 = Math.floor(Math.random() * 10);
-      const captcha = `${num1} + ${num2} = ?`;
-      req.session.captcha = num1 + num2;
+      const captcha = generateCaptchaCode(4);
+      req.session.captcha = captcha; // 标准答案（大写）
       res.json({ captcha });
     } catch (error) {
       logger.error('生成验证码失败:', error);
@@ -581,7 +582,7 @@ module.exports = function(app) {
     try {
       const { username, password, captcha } = req.body;
       
-      if (req.session.captcha !== parseInt(captcha)) {
+      if (!verifyCaptcha(req.session.captcha, captcha)) {
         logger.warn(`Captcha verification failed for user: ${username}`);
         return res.status(401).json({ error: '验证码错误' });
       }
@@ -882,35 +883,25 @@ module.exports = function(app) {
     }
   });
   
-  // 网络测试接口
+  // 网络测试接口（新版专业诊断，保持旧路径兼容）
   app.post('/api/network-test', requireLogin, async (req, res) => {
-    const { type, domain } = req.body;
-    
-    // 验证输入
-    if (!domain || !domain.match(/^[a-zA-Z0-9][a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/)) {
-      return res.status(400).json({ error: '无效的域名格式' });
+    const { type, target, domain, port, url, duration } = req.body;
+
+    // 兼容旧版前端只传 domain 的情况
+    const realTarget = target || domain;
+    if (!type || !realTarget) {
+      return res.status(400).json({ error: '缺少 type 或 target/domain 参数' });
     }
-    
-    if (!type || !['ping', 'traceroute'].includes(type)) {
-      return res.status(400).json({ error: '无效的测试类型' });
-    }
-    
+
     try {
-      const command = type === 'ping' 
-        ? `ping -c 4 ${domain}` 
-        : `traceroute -m 10 ${domain}`;
-        
-      logger.info(`执行网络测试: ${command}`);
-      const result = await execCommand(command, { timeout: 30000 });
-      res.send(result);
+      const result = await networkTestService.runTest({ type, target: realTarget, port, url, duration });
+      res.json(result);
     } catch (error) {
-      logger.error(`执行网络测试命令错误:`, error);
-      
-      if (error.killed) {
-        return res.status(408).send('测试超时');
+      logger.error(`网络测试 [${type}] 失败:`, error);
+      if (error.killed || error.message.includes('超时')) {
+        return res.status(408).json({ error: '测试超时' });
       }
-      
-      res.status(500).send('测试执行失败: ' + (error.message || '未知错误'));
+      res.status(500).json({ error: '测试执行失败', details: error.message || '未知错误' });
     }
   });
   
@@ -946,146 +937,26 @@ module.exports = function(app) {
       }
   });
   
-  // 系统资源兼容路由
+  // 系统资源兼容路由 - 统一复用 systemService，确保网络流量等字段与新版看板一致
   app.get('/api/system-resources', requireLogin, async (req, res) => {
     try {
       const startTime = Date.now();
-      logger.info('兼容层: 请求 /api/system-resources');
-      
-      // 获取CPU信息
-      const cpuCores = os.cpus().length;
-      const cpuModel = os.cpus()[0].model;
-      const cpuSpeed = os.cpus()[0].speed;
-      const loadAvg = os.loadavg();
-      
-      // 获取内存信息
-      const totalMem = os.totalmem();
-      const freeMem = os.freemem();
-      const usedMem = totalMem - freeMem;
-      const memoryPercent = ((usedMem / totalMem) * 100).toFixed(1) + '%';
-      
-      // 获取磁盘信息
-      let diskCommand = '';
-      if (process.platform === 'win32') {
-        diskCommand = 'wmic logicaldisk get size,freespace,caption';
-      } else {
-        // 在 macOS 和 Linux 上使用 df 命令
-        diskCommand = 'df -h /';
-      }
-      
-      try {
-        // 执行磁盘命令
-        logger.debug(`执行磁盘命令: ${diskCommand}`);
-        const { stdout } = await execPromise(diskCommand, { timeout: 5000 });
-        logger.debug(`磁盘命令输出: ${stdout}`);
-        
-        // 解析磁盘信息
-        let disk = { size: "未知", used: "未知", available: "未知", percent: "未知" };
-        
-        if (process.platform === 'win32') {
-          // Windows解析逻辑不变
-          // ... (省略Windows解析代码)
-        } else {
-          // macOS/Linux格式解析
-          const lines = stdout.trim().split('\n');
-          if (lines.length >= 2) {
-            const headerParts = lines[0].trim().split(/\s+/);
-            const dataParts = lines[1].trim().split(/\s+/);
-            
-            logger.debug(`解析磁盘信息, 头部: ${headerParts}, 数据: ${dataParts}`);
-            
-            // 检查MacOS格式 (通常是Filesystem Size Used Avail Capacity iused ifree %iused Mounted on)
-            const isMacOS = headerParts.includes('Capacity') && headerParts.includes('iused');
-            
-            if (isMacOS) {
-              // macOS格式处理
-              const fsIndex = 0; // Filesystem
-              const sizeIndex = 1; // Size
-              const usedIndex = 2; // Used
-              const availIndex = 3; // Avail
-              const percentIndex = 4; // Capacity
-              const mountedIndex = headerParts.indexOf('Mounted') + 1; // Mounted on
-              
-              disk = {
-                filesystem: dataParts[fsIndex],
-                size: dataParts[sizeIndex],
-                used: dataParts[usedIndex],
-                available: dataParts[availIndex],
-                percent: dataParts[percentIndex],
-                mountedOn: dataParts[mountedIndex] || '/'
-              };
-            } else {
-              // 标准Linux格式处理 (通常是Filesystem Size Used Avail Use% Mounted on)
-              const fsIndex = 0; // Filesystem
-              const sizeIndex = 1; // Size
-              const usedIndex = 2; // Used
-              const availIndex = 3; // Avail
-              const percentIndex = 4; // Use%
-              const mountedIndex = 5; // Mounted on
-              
-              disk = {
-                filesystem: dataParts[fsIndex],
-                size: dataParts[sizeIndex],
-                used: dataParts[usedIndex],
-                available: dataParts[availIndex],
-                percent: dataParts[percentIndex],
-                mountedOn: dataParts[mountedIndex] || '/'
-              };
-            }
-          }
-        }
-        
-        // 构建最终结果
-        const result = {
-          cpu: {
-            cores: cpuCores,
-            model: cpuModel,
-            speed: cpuSpeed,
-            loadAvg: loadAvg
-          },
-          memory: {
-            total: totalMem,
-            free: freeMem,
-            used: usedMem,
-            percent: memoryPercent
-          },
-          disk: disk,
-          uptime: os.uptime()
-        };
-        
-        logger.debug(`系统资源API返回结果: ${JSON.stringify(result)}`);
-        
-        // 计算处理时间并返回结果
-        const endTime = Date.now();
-        logger.info(`兼容层: /api/system-resources 请求完成，耗时 ${endTime - startTime}ms`);
-        res.json(result);
-      } catch (diskError) {
-        // 磁盘信息获取失败时，仍然返回CPU和内存信息
-        logger.error(`获取磁盘信息失败: ${diskError.message}`);
-        
-        const result = {
-          cpu: {
-            cores: cpuCores,
-            model: cpuModel,
-            speed: cpuSpeed,
-            loadAvg: loadAvg
-          },
-          memory: {
-            total: totalMem,
-            free: freeMem,
-            used: usedMem,
-            percent: memoryPercent
-          },
-          disk: { size: "未知", used: "未知", available: "未知", percent: "未知" },
-          uptime: os.uptime(),
-          diskError: diskError.message
-        };
-        
-        // 计算处理时间并返回结果（即使有错误）
-        const endTime = Date.now();
-        logger.info(`兼容层: /api/system-resources 请求完成（但磁盘信息失败），耗时 ${endTime - startTime}ms`);
-        res.json(result);
-      }
+      logger.info('兼容层: 请求 /api/system-resources（转发至 systemService）');
+
+      const r = await systemService.getSystemResources();
+      const result = {
+        cpu: r.cpu,
+        memory: r.memory,
+        disk: r.disk,
+        diskSpace: r.disk,
+        network: r.network,
+        system: r.system,
+        uptime: r.system?.uptime ?? os.uptime()
+      };
+
+      const endTime = Date.now();
+      logger.info(`兼容层: /api/system-resources 请求完成，耗时 ${endTime - startTime}ms`);
+      res.json(result);
     } catch (error) {
       logger.error(`系统资源API错误: ${error.message}`);
       res.status(500).json({ error: '获取系统资源信息失败', message: error.message });

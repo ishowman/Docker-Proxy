@@ -162,6 +162,42 @@ html:not(.dark) .el-alert { background-color: var(--bg-card-2) !important; }
 .text-fg { color: var(--fg); }
 .text-fg-2 { color: var(--fg-2); }
 
+/* ============ 通用指标卡（网络诊断结果等，双主题自适应） ============ */
+.metric-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; margin-bottom: 16px; }
+.metric-card {
+  position: relative; overflow: hidden;
+  background: var(--bg-card-2);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 14px 16px;
+  transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease;
+}
+.metric-card::before {
+  content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px;
+  background: linear-gradient(180deg, var(--accent), var(--accent-2));
+}
+.metric-card:hover { transform: translateY(-2px); box-shadow: 0 10px 22px rgba(15, 23, 42, .10); border-color: var(--border-strong); }
+.metric-ico {
+  width: 30px; height: 30px; border-radius: 8px;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--accent-soft); color: var(--accent); font-size: 16px; margin-bottom: 10px;
+}
+.metric-label { font-size: 12px; color: var(--muted); margin-bottom: 6px; letter-spacing: .2px; }
+.metric-value { font-size: 18px; font-weight: 700; color: var(--fg); line-height: 1.25; font-variant-numeric: tabular-nums; }
+.metric-value.good { color: var(--success); }
+.metric-value.warn { color: var(--warning); }
+.metric-value.bad { color: var(--danger); }
+
+/* 块级结果容器统一入场动画 */
+.result-anim { animation: resultFade .3s ease both; }
+@keyframes resultFade { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .metric-card { transition: none; }
+  .metric-card:hover { transform: none; }
+  .result-anim { animation: none; }
+}
+
 /* ============ 通用后台数据表格 admin-table (v2 专业版) ============ */
 /* 用 <el-table class="admin-table"> 包裹即可获得统一精致风格（双主题自适应） */
 .admin-table {

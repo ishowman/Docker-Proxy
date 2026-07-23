@@ -39,12 +39,29 @@
           <div class="captcha-row">
             <el-input
               v-model="form.captcha"
-              placeholder="请输入计算结果"
+              placeholder="请输入右侧验证码（不区分大小写）"
               :prefix-icon="Key"
               size="large"
               @keyup.enter="onSubmit"
             />
-            <div class="captcha-box" title="点击刷新" @click="loadCaptcha">{{ captchaText }}</div>
+            <div
+              class="captcha-box"
+              :class="{ error: captchaError, loading: captchaLoading }"
+              title="点击刷新验证码"
+              @click="loadCaptcha"
+            >
+              <template v-if="captchaLoading">
+                <el-icon class="captcha-icon spin"><Loading /></el-icon>
+                <span class="captcha-hint">加载中</span>
+              </template>
+              <template v-else-if="captchaError">
+                <el-icon class="captcha-icon"><Warning /></el-icon>
+                <span class="captcha-hint">点击重试</span>
+              </template>
+              <template v-else>
+                <span class="captcha-code">{{ captchaText }}</span>
+              </template>
+            </div>
           </div>
         </el-form-item>
 
@@ -65,7 +82,7 @@
 import { ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { User, Lock, Key } from '@element-plus/icons-vue'
+import { User, Lock, Key, Loading, Warning } from '@element-plus/icons-vue'
 import { getCaptcha, login, checkSession } from '../services'
 import { useAuth } from '../composables/useAuth'
 
@@ -82,14 +99,26 @@ const router = useRouter()
 const { refresh } = useAuth()
 const form = ref({ username: '', password: '', captcha: '' })
 const captchaText = ref('')
+const captchaLoading = ref(false)
+const captchaError = ref(false)
 const loading = ref(false)
 
 async function loadCaptcha() {
+  captchaLoading.value = true
+  captchaError.value = false
   try {
     const data = await getCaptcha()
-    captchaText.value = data.captcha || '加载失败'
+    if (data && data.captcha) {
+      captchaText.value = data.captcha
+      captchaError.value = false
+    } else {
+      throw new Error('empty captcha')
+    }
   } catch (e) {
-    captchaText.value = '加载失败，点击重试'
+    captchaText.value = ''
+    captchaError.value = true
+  } finally {
+    captchaLoading.value = false
   }
 }
 
@@ -264,26 +293,76 @@ onMounted(async () => {
 }
 .captcha-box {
   flex: 0 0 auto;
-  min-width: 104px;
+  min-width: 108px;
   height: 44px;
-  padding: 0 16px;
+  padding: 0 14px;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  font-weight: 700;
-  font-size: 15px;
-  letter-spacing: 1px;
-  color: #fff;
-  background: linear-gradient(135deg, #0a84ff, #0066d6);
+  gap: 2px;
   border-radius: 11px;
   cursor: pointer;
   user-select: none;
+  position: relative;
+  overflow: hidden;
+  color: #fff;
+  background: linear-gradient(135deg, #0a84ff, #0066d6);
   box-shadow: 0 4px 12px rgba(10, 132, 255, 0.35);
-  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.2s ease;
+}
+.captcha-box::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image:
+    repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(255,255,255,0.06) 2px, rgba(255,255,255,0.06) 4px),
+    repeating-linear-gradient(90deg, transparent, transparent 8px, rgba(255,255,255,0.05) 8px, rgba(255,255,255,0.05) 9px);
+  pointer-events: none;
 }
 .captcha-box:hover {
   transform: translateY(-1px);
   box-shadow: 0 6px 16px rgba(10, 132, 255, 0.45);
+}
+.captcha-box.error {
+  background: linear-gradient(135deg, #ff9f43, #f36c21);
+  box-shadow: 0 4px 12px rgba(243, 108, 33, 0.32);
+}
+.captcha-box.error:hover {
+  box-shadow: 0 6px 16px rgba(243, 108, 33, 0.42);
+}
+.captcha-box.loading {
+  background: linear-gradient(135deg, #8e9aaf, #6b7280);
+  box-shadow: 0 4px 12px rgba(107, 114, 128, 0.28);
+}
+.captcha-code {
+  position: relative;
+  z-index: 1;
+  font-weight: 800;
+  font-size: 20px;
+  font-family: 'SF Mono', 'JetBrains Mono', 'Menlo', 'Consolas', monospace;
+  letter-spacing: 4px;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.12);
+}
+.captcha-icon {
+  position: relative;
+  z-index: 1;
+  font-size: 16px;
+}
+.captcha-hint {
+  position: relative;
+  z-index: 1;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.4px;
+  opacity: 0.95;
+}
+@keyframes captcha-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+.spin {
+  animation: captcha-spin 1s linear infinite;
 }
 
 .submit-btn {

@@ -13,6 +13,7 @@ const configServiceDB = require('../services/configServiceDB');
 const { execCommand, getSystemInfo } = require('../server-utils');
 const dockerService = require('../services/dockerService');
 const systemService = require('../services/systemService');
+const networkTestService = require('../services/networkTestService');
 const path = require('path');
 const fs = require('fs').promises;
 
@@ -163,31 +164,28 @@ router.get('/disk-space', requireLogin, async (req, res) => {
   }
 });
 
-// 网络测试
+// 网络测试（专业诊断：ping / traceroute / http / dns / tcp / speed）
 router.post('/network-test', requireLogin, async (req, res) => {
-  const { type, domain } = req.body;
-  
-  // 验证输入
-  function validateInput(input, type) {
-    if (type === 'domain') {
-      return /^[a-zA-Z0-9][a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(input);
-    }
-    return false;
+  const { type, target, port, url, duration } = req.body;
+
+  if (!type || !target) {
+    return res.status(400).json({ error: '缺少 type 或 target 参数' });
   }
-  
-  if (!validateInput(domain, 'domain')) {
-    return res.status(400).json({ error: '无效的域名格式' });
+
+  const supported = ['ping', 'traceroute', 'http', 'dns', 'tcp', 'speed'];
+  if (!supported.includes(type)) {
+    return res.status(400).json({ error: `不支持的测试类型，仅支持 ${supported.join('/')}` });
   }
-  
+
   try {
-    const result = await execCommand(`${type === 'ping' ? 'ping -c 4' : 'traceroute -m 10'} ${domain}`, { timeout: 30000 });
-    res.send(result);
+    const result = await networkTestService.runTest({ type, target, port, url, duration });
+    res.json(result);
   } catch (error) {
-    if (error.killed) {
-      return res.status(408).send('测试超时');
+    if (error.killed || error.message.includes('超时')) {
+      return res.status(408).json({ error: '测试超时' });
     }
-    logger.error(`执行网络测试命令错误:`, error);
-    res.status(500).send('测试执行失败: ' + error.message);
+    logger.error(`网络测试 [${type}] 失败:`, error);
+    res.status(500).json({ error: '测试执行失败', details: error.message });
   }
 });
 

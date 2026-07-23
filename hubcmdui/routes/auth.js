@@ -6,13 +6,14 @@ const router = express.Router();
 const userServiceDB = require('../services/userServiceDB');
 const logger = require('../logger');
 const { requireLogin } = require('../middleware/auth');
+const { generateCaptchaCode, verifyCaptcha } = require('../lib/captcha');
 
 // 登录验证
 router.post('/login', async (req, res) => {
   const { username, password, captcha } = req.body;
   
-  // 验证码检查
-  if (req.session.captcha !== parseInt(captcha)) {
+  // 验证码检查（随机字母/数字，大小写不敏感）
+  if (!verifyCaptcha(req.session.captcha, captcha)) {
     logger.warn(`Captcha verification failed for user: ${username}`);
     return res.status(401).json({ error: '验证码错误' });
   }
@@ -121,10 +122,8 @@ router.get('/user-info', requireLogin, async (req, res) => {
 
 // 生成验证码
 router.get('/captcha', (req, res) => {
-  const num1 = Math.floor(Math.random() * 10);
-  const num2 = Math.floor(Math.random() * 10);
-  const captcha = `${num1} + ${num2} = ?`;
-  req.session.captcha = num1 + num2;
+  const captcha = generateCaptchaCode(4);
+  req.session.captcha = captcha; // 标准答案（大写）
   
   // 确保serverStartTime已初始化
   if (!global.serverStartTime) {
@@ -167,8 +166,8 @@ router.get('/check-session', (req, res) => {
 router.post('/request-reset-token', async (req, res) => {
   const { username, captcha } = req.body;
   
-  // 验证码检查
-  if (req.session.captcha !== parseInt(captcha)) {
+  // 验证码检查（随机字母/数字，大小写不敏感）
+  if (!verifyCaptcha(req.session.captcha, captcha)) {
     logger.warn(`重置密码验证码验证失败: ${username}`);
     return res.status(401).json({ error: '验证码错误' });
   }
