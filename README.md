@@ -62,11 +62,10 @@
 ```bash
 docker compose up -d
 ```
-镜像来自 Docker Hub：[`dqzboy/registry`](https://hub.docker.com/r/dqzboy/registry)（Docker 镜像加速，go-proxy）与 [`dqzboy/hubcmd-ui`](https://hub.docker.com/r/dqzboy/hubcmd-ui)（管理面板）。
 
 
 ### 一键部署脚本
-仓库内置 [`install/DockerProxy_Install.sh`](./install/DockerProxy_Install.sh)，交互式菜单一键完成「安装依赖 → 启动 Docker 镜像加速 (go-proxy + hubcmd-ui) →（可选）渲染 Nginx/Caddy 反代」。
+仓库内置 [`install/DockerProxy_Install.sh`](./install/DockerProxy_Install.sh)，交互式菜单一键完成「安装依赖 → 启动 Docker 镜像加速 →（可选）渲染 Nginx/Caddy 反代」。
 
 ```shell
 # CentOS && RHEL && Rocky

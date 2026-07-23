@@ -62,11 +62,10 @@ Download [`docker-compose.yaml`](./docker-compose.yaml) and run:
 ```bash
 docker compose up -d
 ```
-Images are from Docker Hub: [`dqzboy/registry`](https://hub.docker.com/r/dqzboy/registry) (Docker image acceleration, go-proxy) and [`dqzboy/hubcmd-ui`](https://hub.docker.com/r/dqzboy/hubcmd-ui) (management panel).
 
 
 ### One-click deployment script
-The repository includes [`install/DockerProxy_Install.sh`](./install/DockerProxy_Install.sh), an interactive menu that completes "install dependencies → start Docker image acceleration (go-proxy + hubcmd-ui) → (optional) render Nginx/Caddy reverse proxy" in one click.
+The repository includes [`install/DockerProxy_Install.sh`](./install/DockerProxy_Install.sh), an interactive menu that completes "install dependencies → start Docker image acceleration  → (optional) render Nginx/Caddy reverse proxy" in one click.
 
 ```shell
 # CentOS && RHEL && Rocky
